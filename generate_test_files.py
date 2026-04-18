@@ -14,6 +14,7 @@ def build_test_frame(row_count: int = 100) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     categories = ["A", "B", "C", "D"]
     regions = ["East", "West", "North", "South"]
+    channels = ["Online", "Store", "Partner"]
 
     for idx in range(row_count):
         second_of_day = (idx * 137) % 86400
@@ -27,6 +28,7 @@ def build_test_frame(row_count: int = 100) -> pd.DataFrame:
                 "Region": regions[(idx // len(categories)) % len(regions)],
                 "Amount": 100 + idx * 3,
                 "Score": round(60 + (idx % 17) * 1.5, 1),
+                "Channel": channels[idx % len(channels)],
             }
         )
     return pd.DataFrame(rows)
