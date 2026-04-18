@@ -1,0 +1,10 @@
+{
+  "transforms": [
+    ["C", "lambda x: x * 2"],
+    ["E", "lambda x: str(x).upper()"]
+  ],
+  "pivot_filters": ["A"],
+  "pivot_rows": ["B"],
+  "pivot_columns": ["D"],
+  "pivot_values": ["C"]
+}
