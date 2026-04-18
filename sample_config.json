@@ -1,4 +1,5 @@
 {
+  "input": "inputs/sample.csv",
   "suffix": "TEST",
   "transforms": [
     ["C", "double_value"],
