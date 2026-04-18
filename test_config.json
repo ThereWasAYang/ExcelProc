@@ -1,4 +1,5 @@
 {
+  "input": "inputs/test_input_100rows.csv",
   "suffix": "CHECK",
   "transforms": [
     ["D", "double_value"]
