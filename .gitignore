@@ -8,3 +8,4 @@ __pycache__/
 *.xlsx
 !sample.xlsx
 !*.template.xlsx
+!test_input_100rows.xlsx

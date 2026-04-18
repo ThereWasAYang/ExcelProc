@@ -4,8 +4,9 @@
 
 1. 读取源数据。
 2. 根据多个 `(列索引, func)` 规则，在指定列右侧插入计算结果列。
-3. 输出新的 `xlsx` 文件。
-4. 在输出文件中创建透视页：优先创建 Excel 原生透视表；若当前环境不可用 Excel COM，则退化为写入同维度的汇总结果表。
+3. 无论输入是 `csv` 还是 `xlsx`，结果都另存为 `xlsx`。
+4. 默认输出文件名为 `<原文件名>_<suffix>.xlsx`，其中 `suffix` 由用户给定。
+5. 在输出文件中创建透视页：优先创建 Excel 原生透视表；若当前环境不可用 Excel COM，则退化为写入同维度的汇总结果表。
 
 ## Environment
 
@@ -21,17 +22,20 @@ conda run -n py312 python -m pip install pandas openpyxl pywin32
 
 ## Usage
 
-直接传 JSON 参数：
+直接传参数：
 
 ```powershell
 conda run -n py312 python .\excel_processor.py `
-  --input .\sample.xlsx `
-  --transforms "[[\"A\", \"lambda x: x * 2\"], [\"C\", \"lambda x: str(x).strip().upper()\"]]" `
-  --pivot-filters "[\"A\"]" `
-  --pivot-rows "[\"B\"]" `
-  --pivot-columns "[\"C\"]" `
+  --input .\test_input_100rows.csv `
+  --suffix DEMO `
+  --transforms "[[\"D\", \"lambda x: x * 2\"]]" `
+  --pivot-filters "[\"B\"]" `
+  --pivot-rows "[\"C\"]" `
+  --pivot-columns "[\"B\"]" `
   --pivot-values "[\"D\"]"
 ```
+
+这会生成 `test_input_100rows_DEMO.xlsx`。
 
 在 PowerShell 下更推荐使用配置文件：
 
@@ -41,13 +45,29 @@ conda run -n py312 python .\excel_processor.py `
   --config .\sample_config.json
 ```
 
+## Test Data
+
+生成测试文件：
+
+```powershell
+conda run -n py312 python .\generate_test_files.py
+```
+
+会生成：
+
+- `test_input_100rows.csv`
+- `test_input_100rows.xlsx`
+
+两个文件均包含 100 行数据，第一列为 `HH:MM:SS` 格式时间。
+
 ## Arguments
 
 - `--input`: 输入文件，支持 `csv/xlsx`
-- `--output`: 输出文件路径，默认生成 `<原文件名>_processed.xlsx`
+- `--output`: 显式指定输出 `xlsx` 路径；若不传，则按 `--suffix` 自动命名
+- `--suffix`: 自动命名时追加到原文件名后的后缀
 - `--sheet-name`: 输入为 `xlsx` 时可指定源 sheet
 - `--transforms`: 变换规则 JSON 数组
-- `--config`: JSON 配置文件，可包含 `transforms/pivot_filters/pivot_rows/pivot_columns/pivot_values`
+- `--config`: JSON 配置文件，可包含 `suffix/transforms/pivot_filters/pivot_rows/pivot_columns/pivot_values`
 - `--pivot-filters`: 透视表筛选器列索引数组
 - `--pivot-rows`: 透视表行区域列索引数组
 - `--pivot-columns`: 透视表列区域列索引数组

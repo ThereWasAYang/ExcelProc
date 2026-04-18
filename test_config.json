@@ -1,0 +1,10 @@
+{
+  "suffix": "CHECK",
+  "transforms": [
+    ["D", "lambda x: x * 2"]
+  ],
+  "pivot_filters": ["B"],
+  "pivot_rows": ["C"],
+  "pivot_columns": ["B"],
+  "pivot_values": ["D"]
+}

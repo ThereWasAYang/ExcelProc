@@ -60,11 +60,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", required=True, help="Input csv/xlsx path.")
     parser.add_argument(
         "--config",
-        help="Optional JSON config file. Supported keys: transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values.",
+        help="Optional JSON config file. Supported keys: suffix, transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values.",
     )
     parser.add_argument(
         "--output",
-        help="Output xlsx path. Defaults to <input_stem>_processed.xlsx next to the input file.",
+        help="Optional explicit output xlsx path. If omitted, use <input_stem>_<suffix>.xlsx.",
+    )
+    parser.add_argument(
+        "--suffix",
+        help="Suffix appended to the source filename when --output is omitted, e.g. input_A.xlsx.",
     )
     parser.add_argument(
         "--sheet-name",
@@ -117,12 +121,14 @@ def load_frame(input_path: Path, sheet_name: str | None) -> pd.DataFrame:
     if suffix == ".csv":
         return pd.read_csv(input_path)
     if suffix in EXCEL_EXTENSIONS:
-        return pd.read_excel(input_path, sheet_name=sheet_name)
+        return pd.read_excel(input_path, sheet_name=sheet_name if sheet_name is not None else 0)
     raise ValueError(f"Unsupported input type: {suffix}")
 
 
 def save_workbook(base_frame: pd.DataFrame, output_path: Path, data_sheet_name: str) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         base_frame.to_excel(writer, index=False, sheet_name=data_sheet_name)
 
@@ -356,11 +362,13 @@ def main() -> int:
         raise FileNotFoundError(f"Input file not found: {input_path}")
     config = load_config(Path(args.config).expanduser().resolve() if args.config else None)
 
-    output_path = (
-        Path(args.output).expanduser().resolve()
-        if args.output
-        else input_path.with_name(f"{input_path.stem}_processed.xlsx")
-    )
+    suffix = args.suffix if args.suffix is not None else config.get("suffix")
+    if args.output:
+        output_path = Path(args.output).expanduser().resolve()
+    else:
+        if not suffix or not isinstance(suffix, str):
+            raise ValueError("suffix is required when --output is not provided.")
+        output_path = input_path.with_name(f"{input_path.stem}_{suffix}.xlsx").resolve()
 
     transforms_raw = args.transforms
     if transforms_raw is None and "transforms" in config:
