@@ -1,7 +1,7 @@
 {
   "suffix": "CHECK",
   "transforms": [
-    ["D", "lambda x: x * 2"]
+    ["D", "double_value"]
   ],
   "pivot_filters": ["B"],
   "pivot_rows": ["C"],

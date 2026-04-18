@@ -27,6 +27,18 @@ conda run -n py312 python -m pip install pandas openpyxl pywin32
 
 如果本机没有安装 Excel，脚本仍可运行，但透视页会是静态汇总结果表，而不是可交互的 Excel 原生透视表。
 
+## Transform Functions
+
+`func` 不再是 lambda 表达式，而是 [excel_processor.py](E:/Work/Pycharm/ExcelProc/excel_processor.py) 中定义好的函数名。
+
+当前内置了几个示例函数：
+
+- `double_value`
+- `upper_text`
+- `time_to_seconds`
+
+你可以直接在脚本里新增更复杂的函数，然后在配置里引用函数名。
+
 ## Usage
 
 直接传参数：
@@ -35,7 +47,7 @@ conda run -n py312 python -m pip install pandas openpyxl pywin32
 conda run -n py312 python .\excel_processor.py `
   --input .\inputs\test_input_100rows.csv `
   --suffix DEMO `
-  --transforms "[[\"D\", \"lambda x: x * 2\"]]" `
+  --transforms "[[\"A\", \"time_to_seconds\"], [\"D\", \"double_value\"]]" `
   --pivot-filters "[\"B\"]" `
   --pivot-rows "[\"C\"]" `
   --pivot-columns "[\"B\"]" `
@@ -50,6 +62,22 @@ conda run -n py312 python .\excel_processor.py `
 conda run -n py312 python .\excel_processor.py `
   --input .\inputs\sample.csv `
   --config .\sample_config.json
+```
+
+## Config Example
+
+```json
+{
+  "suffix": "TEST",
+  "transforms": [
+    ["C", "double_value"],
+    ["E", "upper_text"]
+  ],
+  "pivot_filters": ["A"],
+  "pivot_rows": ["B"],
+  "pivot_columns": ["D"],
+  "pivot_values": ["C"]
+}
 ```
 
 ## Test Data
@@ -73,7 +101,7 @@ conda run -n py312 python .\generate_test_files.py
 - `--output`: 显式指定输出 `xlsx` 路径；若不传，则默认保存到 `outputs/`
 - `--suffix`: 自动命名时追加到原文件名后的后缀
 - `--sheet-name`: 输入为 `xlsx` 时可指定源 sheet
-- `--transforms`: 变换规则 JSON 数组
+- `--transforms`: 变换规则 JSON 数组，第二项为脚本内函数名
 - `--config`: JSON 配置文件，可包含 `suffix/transforms/pivot_filters/pivot_rows/pivot_columns/pivot_values`
 - `--pivot-filters`: 透视表筛选器列索引数组
 - `--pivot-rows`: 透视表行区域列索引数组
@@ -85,5 +113,5 @@ conda run -n py312 python .\generate_test_files.py
 ## Notes
 
 - 列索引使用 Excel 风格字母，如 `A`、`B`、`AA`
-- `func` 以可调用表达式传入，例如 `lambda x: x * 2`
+- `func` 必须是脚本内已定义的函数名
 - 多个变换按给定顺序依次执行；后续列字母以当前表结构为准

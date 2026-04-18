@@ -21,7 +21,7 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs"
 @dataclass
 class TransformSpec:
     column: str
-    expression: str
+    func_name: str
 
 
 @dataclass
@@ -32,27 +32,32 @@ class PivotSpec:
     values: list[str]
 
 
-SAFE_GLOBALS: dict[str, Any] = {
-    "__builtins__": {},
-    "abs": abs,
-    "all": all,
-    "any": any,
-    "bool": bool,
-    "dict": dict,
-    "float": float,
-    "int": int,
-    "len": len,
-    "list": list,
-    "max": max,
-    "min": min,
-    "pow": pow,
-    "round": round,
-    "set": set,
-    "sorted": sorted,
-    "str": str,
-    "sum": sum,
-    "tuple": tuple,
-    "math": math,
+def double_value(value: Any) -> Any:
+    if pd.isna(value):
+        return value
+    return value * 2
+
+
+def upper_text(value: Any) -> Any:
+    if pd.isna(value):
+        return value
+    return str(value).upper()
+
+
+def time_to_seconds(value: Any) -> Any:
+    if pd.isna(value):
+        return value
+    parts = str(value).split(":")
+    if len(parts) != 3:
+        raise ValueError(f"Expected HH:MM:SS, got: {value}")
+    hours, minutes, seconds = map(int, parts)
+    return hours * 3600 + minutes * 60 + seconds
+
+
+FUNCTION_REGISTRY: dict[str, Callable[[Any], Any]] = {
+    "double_value": double_value,
+    "upper_text": upper_text,
+    "time_to_seconds": time_to_seconds,
 }
 
 
@@ -83,7 +88,7 @@ def parse_args() -> argparse.Namespace:
         required=False,
         help=(
             "JSON array, e.g. "
-            '[["A", "lambda x: x * 2"], ["C", "lambda x: x.strip().upper()"]]'
+            '[["A", "double_value"], ["C", "upper_text"]]'
         ),
     )
     parser.add_argument(
@@ -161,15 +166,15 @@ def normalize_transforms(raw: str) -> list[TransformSpec]:
             and len(item) == 2
             and all(isinstance(part, str) for part in item)
         ):
-            specs.append(TransformSpec(column=item[0], expression=item[1]))
+            specs.append(TransformSpec(column=item[0], func_name=item[1]))
             continue
         if isinstance(item, dict) and isinstance(item.get("column"), str) and isinstance(
             item.get("func"), str
         ):
-            specs.append(TransformSpec(column=item["column"], expression=item["func"]))
+            specs.append(TransformSpec(column=item["column"], func_name=item["func"]))
             continue
         raise ValueError(
-            'Each transform must be ["A", "lambda x: ..."] or {"column": "A", "func": "lambda x: ..."}'
+            'Each transform must be ["A", "function_name"] or {"column": "A", "func": "function_name"}'
         )
     return specs
 
@@ -194,11 +199,12 @@ def excel_column_to_index(column_ref: str) -> int:
     return value - 1
 
 
-def build_callable(expression: str) -> Callable[[Any], Any]:
-    compiled = eval(expression, SAFE_GLOBALS, {})
-    if not callable(compiled):
-        raise ValueError(f"Expression is not callable: {expression}")
-    return compiled
+def get_registered_function(func_name: str) -> Callable[[Any], Any]:
+    func = FUNCTION_REGISTRY.get(func_name)
+    if func is None:
+        available = ", ".join(sorted(FUNCTION_REGISTRY))
+        raise ValueError(f"Unknown transform function: {func_name}. Available: {available}")
+    return func
 
 
 def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.DataFrame:
@@ -209,8 +215,8 @@ def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.Data
         if source_index < 0 or source_index >= len(result.columns):
             raise IndexError(f"Column out of range: {spec.column}")
         source_name = result.columns[source_index]
-        func = build_callable(spec.expression)
-        derived_name = f"{source_name}_result"
+        func = get_registered_function(spec.func_name)
+        derived_name = f"{source_name}_{spec.func_name}"
         insert_index = source_index + 1
         result.insert(insert_index, derived_name, result[source_name].apply(func))
     return result

@@ -1,8 +1,8 @@
 {
   "suffix": "TEST",
   "transforms": [
-    ["C", "lambda x: x * 2"],
-    ["E", "lambda x: str(x).upper()"]
+    ["C", "double_value"],
+    ["E", "upper_text"]
   ],
   "pivot_filters": ["A"],
   "pivot_rows": ["B"],
