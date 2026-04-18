@@ -100,6 +100,7 @@ Generated files:
 - `inputs/test_input_100rows.xlsx`
 
 Each file contains 100 rows, and the first column is a time string in `HH:MM:SS` format.
+The generated test data also includes a `Channel` column that is used by the test config as a PivotTable report filter field.
 
 ## Arguments
 
