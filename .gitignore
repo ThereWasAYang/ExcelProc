@@ -5,7 +5,8 @@ __pycache__/
 .pytest_cache/
 .idea/
 .vscode/
+outputs/
 *.xlsx
+!inputs/*.xlsx
 !sample.xlsx
 !*.template.xlsx
-!test_input_100rows.xlsx

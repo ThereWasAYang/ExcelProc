@@ -13,6 +13,9 @@ import pandas as pd
 
 
 EXCEL_EXTENSIONS = {".xlsx", ".xlsm", ".xltx", ".xltm"}
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_INPUT_DIR = PROJECT_ROOT / "inputs"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs"
 
 
 @dataclass
@@ -64,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        help="Optional explicit output xlsx path. If omitted, use <input_stem>_<suffix>.xlsx.",
+        help="Optional explicit output xlsx path. If omitted, save to outputs/<input_stem>_<suffix>.xlsx.",
     )
     parser.add_argument(
         "--suffix",
@@ -368,7 +371,7 @@ def main() -> int:
     else:
         if not suffix or not isinstance(suffix, str):
             raise ValueError("suffix is required when --output is not provided.")
-        output_path = input_path.with_name(f"{input_path.stem}_{suffix}.xlsx").resolve()
+        output_path = (DEFAULT_OUTPUT_DIR / f"{input_path.stem}_{suffix}.xlsx").resolve()
 
     transforms_raw = args.transforms
     if transforms_raw is None and "transforms" in config:

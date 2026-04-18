@@ -6,6 +6,10 @@ from pathlib import Path
 import pandas as pd
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_INPUT_DIR = PROJECT_ROOT / "inputs"
+
+
 def build_test_frame(row_count: int = 100) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     categories = ["A", "B", "C", "D"]
@@ -29,10 +33,10 @@ def build_test_frame(row_count: int = 100) -> pd.DataFrame:
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent
+    DEFAULT_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     frame = build_test_frame(100)
-    csv_path = root / "test_input_100rows.csv"
-    xlsx_path = root / "test_input_100rows.xlsx"
+    csv_path = DEFAULT_INPUT_DIR / "test_input_100rows.csv"
+    xlsx_path = DEFAULT_INPUT_DIR / "test_input_100rows.xlsx"
 
     frame.to_csv(csv_path, index=False)
     frame.to_excel(xlsx_path, index=False, sheet_name="Sheet1")
