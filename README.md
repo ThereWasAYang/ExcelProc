@@ -13,6 +13,7 @@
 ## Directory Layout
 
 - `inputs/`: sample and test input files
+- `configs/`: sample and test config files
 - `outputs/`: generated output workbooks
 - `excel_processor.py`: main script
 - `generate_test_files.py`: test data generator
@@ -66,7 +67,7 @@ Example with config only:
 
 ```powershell
 conda run -n py312 python .\excel_processor.py `
-  --config .\sample_config.json
+  --config .\configs\sample_config.json
 ```
 
 ## Config Example
@@ -113,6 +114,7 @@ The generated test data also includes a `Channel` column that is used by the tes
 
 - `--input`: input `csv/xlsx` path; can also be provided in `--config`
 - `--config`: JSON config file; supported keys include `input`, `suffix`, `transforms`, `pivot_filters`, `pivot_rows`, `pivot_columns`, `pivot_values`, `pivot_value_settings`
+  Example location: `configs/sample_config.json`
 - `--output`: explicit output `.xlsx` path
 - `--suffix`: suffix appended to the source filename when `--output` is omitted
 - `--sheet-name`: source sheet name when the input is `xlsx`
