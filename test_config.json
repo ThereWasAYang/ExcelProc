@@ -4,7 +4,7 @@
   "transforms": [
     ["D", "double_value"]
   ],
-  "pivot_filters": ["B"],
+  "pivot_filters": ["G"],
   "pivot_rows": ["C"],
   "pivot_columns": ["B"],
   "pivot_values": ["D"]
