@@ -8,5 +8,12 @@
   "pivot_filters": ["A"],
   "pivot_rows": ["B"],
   "pivot_columns": ["D"],
-  "pivot_values": ["C"]
+  "pivot_value_settings": [
+    {
+      "column": "C",
+      "summary": "sum",
+      "name": "Total Amount",
+      "number_format": "#,##0.00"
+    }
+  ]
 }

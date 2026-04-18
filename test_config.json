@@ -7,5 +7,18 @@
   "pivot_filters": ["G"],
   "pivot_rows": ["C"],
   "pivot_columns": ["B"],
-  "pivot_values": ["D"]
+  "pivot_value_settings": [
+    {
+      "column": "D",
+      "summary": "sum",
+      "name": "Total Amount",
+      "number_format": "#,##0"
+    },
+    {
+      "column": "E",
+      "summary": "average",
+      "name": "Average Score",
+      "number_format": "0.0"
+    }
+  ]
 }

@@ -56,10 +56,10 @@ conda run -n py312 python .\excel_processor.py `
   --input .\inputs\test_input_100rows.csv `
   --suffix DEMO `
   --transforms "[[\"A\", \"time_to_seconds\"], [\"D\", \"double_value\"]]" `
-  --pivot-filters "[\"B\"]" `
+  --pivot-filters "[\"G\"]" `
   --pivot-rows "[\"C\"]" `
   --pivot-columns "[\"B\"]" `
-  --pivot-values "[\"D\"]"
+  --pivot-value-settings "[{\"column\": \"D\", \"summary\": \"sum\", \"name\": \"Total Amount\", \"number_format\": \"#,##0\"}, {\"column\": \"E\", \"summary\": \"average\", \"name\": \"Average Score\", \"number_format\": \"0.0\"}]"
 ```
 
 Example with config only:
@@ -82,7 +82,14 @@ conda run -n py312 python .\excel_processor.py `
   "pivot_filters": ["A"],
   "pivot_rows": ["B"],
   "pivot_columns": ["D"],
-  "pivot_values": ["C"]
+  "pivot_value_settings": [
+    {
+      "column": "C",
+      "summary": "sum",
+      "name": "Total Amount",
+      "number_format": "#,##0.00"
+    }
+  ]
 }
 ```
 
@@ -105,7 +112,7 @@ The generated test data also includes a `Channel` column that is used by the tes
 ## Arguments
 
 - `--input`: input `csv/xlsx` path; can also be provided in `--config`
-- `--config`: JSON config file; supported keys include `input`, `suffix`, `transforms`, `pivot_filters`, `pivot_rows`, `pivot_columns`, `pivot_values`
+- `--config`: JSON config file; supported keys include `input`, `suffix`, `transforms`, `pivot_filters`, `pivot_rows`, `pivot_columns`, `pivot_values`, `pivot_value_settings`
 - `--output`: explicit output `.xlsx` path
 - `--suffix`: suffix appended to the source filename when `--output` is omitted
 - `--sheet-name`: source sheet name when the input is `xlsx`
@@ -114,6 +121,7 @@ The generated test data also includes a `Channel` column that is used by the tes
 - `--pivot-rows`: JSON array of PivotTable row field column letters
 - `--pivot-columns`: JSON array of PivotTable column field column letters
 - `--pivot-values`: JSON array of PivotTable value field column letters
+- `--pivot-value-settings`: JSON array of value field setting objects. Supported keys are `column`, `summary`, `name`, `number_format`
 - `--pivot-sheet-name`: PivotTable sheet name, default `PivotTable`
 - `--data-sheet-name`: normalized source data sheet name, default `SourceData`
 
@@ -121,4 +129,6 @@ The generated test data also includes a `Channel` column that is used by the tes
 
 - Column references use Excel letters such as `A`, `B`, `AA`.
 - Each transform is applied against the current worksheet structure after previous inserted columns.
+- `pivot_value_settings` takes precedence over `pivot_values` when both are provided.
+- Supported value summaries are `sum`, `count`, `average`/`avg`, `max`, `min`, and `product`.
 - The generated pivot sheet is an actual Excel PivotTable, not a pandas summary table.

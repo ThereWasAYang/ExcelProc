@@ -27,7 +27,15 @@ class PivotSpec:
     filters: list[str]
     rows: list[str]
     columns: list[str]
-    values: list[str]
+    values: list["PivotValueSpec"]
+
+
+@dataclass
+class PivotValueSpec:
+    column: str
+    summary: str = "sum"
+    custom_name: str | None = None
+    number_format: str | None = None
 
 
 def double_value(value: Any) -> Any:
@@ -59,6 +67,17 @@ FUNCTION_REGISTRY: dict[str, Callable[[Any], Any]] = {
 }
 
 
+PIVOT_SUMMARY_FUNCTIONS = {
+    "sum": -4157,
+    "count": -4112,
+    "average": -4106,
+    "avg": -4106,
+    "max": -4136,
+    "min": -4139,
+    "product": -4149,
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Process CSV/XLSX, insert derived columns, and create a native Excel pivot table."
@@ -66,7 +85,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", help="Input csv/xlsx path.")
     parser.add_argument(
         "--config",
-        help="Optional JSON config file. Supported keys: input, suffix, transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values.",
+        help="Optional JSON config file. Supported keys: input, suffix, transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values, pivot_value_settings.",
     )
     parser.add_argument(
         "--output",
@@ -108,6 +127,14 @@ def parse_args() -> argparse.Namespace:
         "--pivot-values",
         required=False,
         help='JSON array of column letters for pivot values, e.g. ["E", "F"].',
+    )
+    parser.add_argument(
+        "--pivot-value-settings",
+        required=False,
+        help=(
+            "Optional JSON array for native Excel PivotTable value field settings, "
+            'e.g. [{"column": "E", "summary": "sum", "name": "Total E", "number_format": "#,##0.00"}].'
+        ),
     )
     parser.add_argument(
         "--pivot-sheet-name",
@@ -177,6 +204,44 @@ def normalize_transforms(raw: str) -> list[TransformSpec]:
     return specs
 
 
+def normalize_pivot_value_settings(raw: str) -> list[PivotValueSpec]:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("pivot_value_settings must be valid JSON.") from exc
+    if not isinstance(value, list):
+        raise ValueError("pivot_value_settings must be a JSON array.")
+
+    specs: list[PivotValueSpec] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError(
+                "Each pivot value setting must be an object like "
+                '{"column": "E", "summary": "sum", "name": "Total E", "number_format": "#,##0.00"}.'
+            )
+        column = item.get("column")
+        summary = item.get("summary", "sum")
+        custom_name = item.get("name")
+        number_format = item.get("number_format")
+        if not isinstance(column, str):
+            raise ValueError("pivot value setting column must be a string.")
+        if not isinstance(summary, str):
+            raise ValueError("pivot value setting summary must be a string.")
+        if custom_name is not None and not isinstance(custom_name, str):
+            raise ValueError("pivot value setting name must be a string when provided.")
+        if number_format is not None and not isinstance(number_format, str):
+            raise ValueError("pivot value setting number_format must be a string when provided.")
+        specs.append(
+            PivotValueSpec(
+                column=column,
+                summary=summary.strip().lower(),
+                custom_name=custom_name,
+                number_format=number_format,
+            )
+        )
+    return specs
+
+
 def load_config(config_path: Path | None) -> dict[str, Any]:
     if config_path is None:
         return {}
@@ -230,6 +295,51 @@ def column_letters_to_names(frame: pd.DataFrame, letters: list[str]) -> list[str
     return names
 
 
+def build_pivot_value_specs(
+    pivot_values_raw: str | None,
+    pivot_value_settings_raw: str | None,
+) -> list[PivotValueSpec]:
+    if pivot_value_settings_raw is not None:
+        specs = normalize_pivot_value_settings(pivot_value_settings_raw)
+        if not specs:
+            raise ValueError("pivot_value_settings cannot be empty when provided.")
+        return specs
+
+    if pivot_values_raw is None:
+        raise ValueError(
+            "pivot_values or pivot_value_settings is required, either via CLI or --config."
+        )
+
+    letters = normalize_json_array(pivot_values_raw, "pivot_values")
+    if not letters:
+        raise ValueError("pivot_values cannot be empty.")
+    return [PivotValueSpec(column=letter) for letter in letters]
+
+
+def get_pivot_summary_function(summary: str) -> int:
+    excel_function = PIVOT_SUMMARY_FUNCTIONS.get(summary.strip().lower())
+    if excel_function is None:
+        available = ", ".join(sorted(PIVOT_SUMMARY_FUNCTIONS))
+        raise ValueError(
+            f"Unsupported pivot value summary: {summary}. Available: {available}"
+        )
+    return excel_function
+
+
+def default_data_field_name(source_name: str, summary: str) -> str:
+    summary_labels = {
+        "sum": "Sum of",
+        "count": "Count of",
+        "average": "Average of",
+        "avg": "Average of",
+        "max": "Max of",
+        "min": "Min of",
+        "product": "Product of",
+    }
+    prefix = summary_labels.get(summary.strip().lower(), summary.strip().title())
+    return f"{prefix} {source_name}"
+
+
 def create_excel_pivot_table(
     output_path: Path,
     data_sheet_name: str,
@@ -247,11 +357,15 @@ def create_excel_pivot_table(
 
     row_names = column_letters_to_names(frame, spec.rows)
     column_names = column_letters_to_names(frame, spec.columns)
-    value_names = column_letters_to_names(frame, spec.values)
     filter_names = column_letters_to_names(frame, spec.filters)
 
-    if not value_names:
+    if not spec.values:
         raise ValueError("pivot_values cannot be empty.")
+
+    value_field_specs: list[tuple[str, PivotValueSpec]] = []
+    for value_spec in spec.values:
+        value_name = column_letters_to_names(frame, [value_spec.column])[0]
+        value_field_specs.append((value_name, value_spec))
 
     pythoncom.CoInitialize()
     excel = None
@@ -293,9 +407,15 @@ def create_excel_pivot_table(
             field = pivot_table.PivotFields(name)
             field.Orientation = 2
 
-        for name in value_names:
-            field = pivot_table.PivotFields(name)
-            pivot_table.AddDataField(field, f"Sum of {name}", -4157)
+        for source_name, value_spec in value_field_specs:
+            field = pivot_table.PivotFields(source_name)
+            data_field = pivot_table.AddDataField(
+                field,
+                value_spec.custom_name or default_data_field_name(source_name, value_spec.summary),
+                get_pivot_summary_function(value_spec.summary),
+            )
+            if value_spec.number_format:
+                data_field.NumberFormat = value_spec.number_format
 
         workbook.Save()
     except Exception as exc:
@@ -340,8 +460,11 @@ def main() -> int:
     pivot_values_raw = args.pivot_values
     if pivot_values_raw is None and "pivot_values" in config:
         pivot_values_raw = json.dumps(config["pivot_values"], ensure_ascii=False)
-    if pivot_values_raw is None:
-        raise ValueError("pivot_values is required, either via --pivot-values or --config.")
+    pivot_value_settings_raw = args.pivot_value_settings
+    if pivot_value_settings_raw is None and "pivot_value_settings" in config:
+        pivot_value_settings_raw = json.dumps(
+            config["pivot_value_settings"], ensure_ascii=False
+        )
 
     transforms = normalize_transforms(transforms_raw)
     pivot_spec = PivotSpec(
@@ -363,7 +486,7 @@ def main() -> int:
             else json.dumps(config.get("pivot_columns", []), ensure_ascii=False),
             "pivot_columns",
         ),
-        values=normalize_json_array(pivot_values_raw, "pivot_values"),
+        values=build_pivot_value_specs(pivot_values_raw, pivot_value_settings_raw),
     )
 
     frame = load_frame(input_path, args.sheet_name)
