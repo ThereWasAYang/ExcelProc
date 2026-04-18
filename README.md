@@ -1,47 +1,55 @@
 # ExcelProc
 
-处理 `csv` 或 `xlsx` 文件，支持：
+`ExcelProc` processes a `csv` or `xlsx` file, inserts derived columns based on script-defined functions, and then creates a native Excel PivotTable in the output workbook.
 
-1. 读取源数据。
-2. 根据多个 `(列索引, func)` 规则，在指定列右侧插入计算结果列。
-3. 无论输入是 `csv` 还是 `xlsx`，结果都另存为 `xlsx`。
-4. 默认输出文件保存到 `outputs/` 目录，文件名为 `<原文件名>_<suffix>.xlsx`。
-5. 测试输入文件统一放到 `inputs/` 目录。
-6. 在输出文件中创建透视页：优先创建 Excel 原生透视表；若当前环境不可用 Excel COM，则退化为写入同维度的汇总结果表。
+## Features
+
+1. Read `csv` or `xlsx`.
+2. Apply multiple `(X, func)` transforms, where `X` is a column letter like `A` or `B`, and `func` is a function defined in `excel_processor.py`.
+3. Save the result as `xlsx` only.
+4. Output files are saved under `outputs/` by default, with the name `<input_stem>_<suffix>.xlsx`.
+5. Build a native Excel PivotTable in a new sheet of the output workbook.
 
 ## Directory Layout
 
-- `inputs/`: 输入样本和测试文件
-- `outputs/`: 脚本处理后的输出文件
-- 根目录: 代码、配置和依赖说明
+- `inputs/`: sample and test input files
+- `outputs/`: generated output workbooks
+- `excel_processor.py`: main script
+- `generate_test_files.py`: test data generator
 
 ## Environment
 
-默认使用 conda 环境 `py312`。
+The project uses the conda environment `py312`.
 
-## Install
+## Required Dependencies
 
 ```powershell
 conda run -n py312 python -m pip install pandas openpyxl pywin32
 ```
 
-如果本机没有安装 Excel，脚本仍可运行，但透视页会是静态汇总结果表，而不是可交互的 Excel 原生透视表。
+The PivotTable is the real Excel PivotTable from the Excel UI. That means:
+
+- `pywin32` must be installed in `py312`
+- Microsoft Excel must be installed on the machine
+- the script must be able to launch Excel locally
+
+If any of these requirements is missing, the script will fail directly instead of generating a fallback summary sheet.
 
 ## Transform Functions
 
-`func` 不再是 lambda 表达式，而是 [excel_processor.py](E:/Work/Pycharm/ExcelProc/excel_processor.py) 中定义好的函数名。
+`func` is not a lambda expression. It must be the name of a function defined in [excel_processor.py](E:/Work/Pycharm/ExcelProc/excel_processor.py).
 
-当前内置了几个示例函数：
+Current built-in examples:
 
 - `double_value`
 - `upper_text`
 - `time_to_seconds`
 
-你可以直接在脚本里新增更复杂的函数，然后在配置里引用函数名。
+You can add more complex business logic by defining more functions in `excel_processor.py` and then referencing the function names in config or CLI arguments.
 
 ## Usage
 
-直接传参数：
+Example with CLI arguments:
 
 ```powershell
 conda run -n py312 python .\excel_processor.py `
@@ -54,13 +62,10 @@ conda run -n py312 python .\excel_processor.py `
   --pivot-values "[\"D\"]"
 ```
 
-这会生成 `outputs\test_input_100rows_DEMO.xlsx`。
-
-在 PowerShell 下更推荐使用配置文件：
+Example with config only:
 
 ```powershell
 conda run -n py312 python .\excel_processor.py `
-  --input .\inputs\sample.csv `
   --config .\sample_config.json
 ```
 
@@ -68,6 +73,7 @@ conda run -n py312 python .\excel_processor.py `
 
 ```json
 {
+  "input": "inputs/sample.csv",
   "suffix": "TEST",
   "transforms": [
     ["C", "double_value"],
@@ -82,36 +88,36 @@ conda run -n py312 python .\excel_processor.py `
 
 ## Test Data
 
-生成测试文件：
+Generate test files with:
 
 ```powershell
 conda run -n py312 python .\generate_test_files.py
 ```
 
-会生成：
+Generated files:
 
-- `inputs\test_input_100rows.csv`
-- `inputs\test_input_100rows.xlsx`
+- `inputs/test_input_100rows.csv`
+- `inputs/test_input_100rows.xlsx`
 
-两个文件均包含 100 行数据，第一列为 `HH:MM:SS` 格式时间。
+Each file contains 100 rows, and the first column is a time string in `HH:MM:SS` format.
 
 ## Arguments
 
-- `--input`: 输入文件，支持 `csv/xlsx`
-- `--output`: 显式指定输出 `xlsx` 路径；若不传，则默认保存到 `outputs/`
-- `--suffix`: 自动命名时追加到原文件名后的后缀
-- `--sheet-name`: 输入为 `xlsx` 时可指定源 sheet
-- `--transforms`: 变换规则 JSON 数组，第二项为脚本内函数名
-- `--config`: JSON 配置文件，可包含 `suffix/transforms/pivot_filters/pivot_rows/pivot_columns/pivot_values`
-- `--pivot-filters`: 透视表筛选器列索引数组
-- `--pivot-rows`: 透视表行区域列索引数组
-- `--pivot-columns`: 透视表列区域列索引数组
-- `--pivot-values`: 透视表值区域列索引数组
-- `--pivot-sheet-name`: 透视页名称，默认 `PivotTable`
-- `--data-sheet-name`: 输出源数据 sheet 名称，默认 `SourceData`
+- `--input`: input `csv/xlsx` path; can also be provided in `--config`
+- `--config`: JSON config file; supported keys include `input`, `suffix`, `transforms`, `pivot_filters`, `pivot_rows`, `pivot_columns`, `pivot_values`
+- `--output`: explicit output `.xlsx` path
+- `--suffix`: suffix appended to the source filename when `--output` is omitted
+- `--sheet-name`: source sheet name when the input is `xlsx`
+- `--transforms`: JSON array of transforms
+- `--pivot-filters`: JSON array of PivotTable report filter column letters
+- `--pivot-rows`: JSON array of PivotTable row field column letters
+- `--pivot-columns`: JSON array of PivotTable column field column letters
+- `--pivot-values`: JSON array of PivotTable value field column letters
+- `--pivot-sheet-name`: PivotTable sheet name, default `PivotTable`
+- `--data-sheet-name`: normalized source data sheet name, default `SourceData`
 
 ## Notes
 
-- 列索引使用 Excel 风格字母，如 `A`、`B`、`AA`
-- `func` 必须是脚本内已定义的函数名
-- 多个变换按给定顺序依次执行；后续列字母以当前表结构为准
+- Column references use Excel letters such as `A`, `B`, `AA`.
+- Each transform is applied against the current worksheet structure after previous inserted columns.
+- The generated pivot sheet is an actual Excel PivotTable, not a pandas summary table.
