@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,12 +61,12 @@ FUNCTION_REGISTRY: dict[str, Callable[[Any], Any]] = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Process CSV/XLSX, insert derived columns, and create a pivot sheet."
+        description="Process CSV/XLSX, insert derived columns, and create a native Excel pivot table."
     )
-    parser.add_argument("--input", required=True, help="Input csv/xlsx path.")
+    parser.add_argument("--input", help="Input csv/xlsx path.")
     parser.add_argument(
         "--config",
-        help="Optional JSON config file. Supported keys: suffix, transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values.",
+        help="Optional JSON config file. Supported keys: input, suffix, transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values.",
     )
     parser.add_argument(
         "--output",
@@ -114,7 +112,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pivot-sheet-name",
         default="PivotTable",
-        help="Name of the pivot/result sheet.",
+        help="Name of the native Excel pivot table sheet.",
     )
     parser.add_argument(
         "--data-sheet-name",
@@ -232,71 +230,28 @@ def column_letters_to_names(frame: pd.DataFrame, letters: list[str]) -> list[str
     return names
 
 
-def create_pivot_dataframe(frame: pd.DataFrame, spec: PivotSpec) -> pd.DataFrame:
-    row_names = column_letters_to_names(frame, spec.rows)
-    column_names = column_letters_to_names(frame, spec.columns)
-    value_names = column_letters_to_names(frame, spec.values)
-
-    if not value_names:
-        raise ValueError("Pivot values cannot be empty.")
-
-    pivot = pd.pivot_table(
-        frame,
-        index=row_names or None,
-        columns=column_names or None,
-        values=value_names,
-        aggfunc="sum",
-        fill_value=0,
-        observed=False,
-    )
-
-    if isinstance(pivot.columns, pd.MultiIndex):
-        pivot.columns = [" | ".join(map(str, col)).strip() for col in pivot.columns.to_flat_index()]
-    else:
-        pivot.columns = [str(col) for col in pivot.columns]
-
-    pivot = pivot.reset_index()
-
-    if spec.filters:
-        filter_names = column_letters_to_names(frame, spec.filters)
-        summary = {}
-        for name in filter_names:
-            unique_values = frame[name].dropna().unique().tolist()
-            preview = unique_values[:10]
-            suffix = "" if len(unique_values) <= 10 else " ..."
-            summary[name] = f"{preview}{suffix}"
-        filter_row = {key: "" for key in pivot.columns}
-        if len(pivot.columns) > 0:
-            first_col = pivot.columns[0]
-            filter_row[first_col] = "Filters"
-        for name, preview in summary.items():
-            if name in filter_row:
-                filter_row[name] = preview
-        pivot = pd.concat([pd.DataFrame([filter_row]), pivot], ignore_index=True)
-
-    return pivot
-
-
-def try_create_excel_pivot(
+def create_excel_pivot_table(
     output_path: Path,
     data_sheet_name: str,
     pivot_sheet_name: str,
     spec: PivotSpec,
     frame: pd.DataFrame,
-) -> tuple[bool, str | None]:
+) -> None:
     try:
         import pythoncom
         import win32com.client as win32
     except ImportError as exc:
-        return False, f"pywin32 unavailable: {exc}"
+        raise RuntimeError(
+            "Creating a native Excel pivot table requires pywin32 in the py312 environment."
+        ) from exc
 
     row_names = column_letters_to_names(frame, spec.rows)
     column_names = column_letters_to_names(frame, spec.columns)
     value_names = column_letters_to_names(frame, spec.values)
     filter_names = column_letters_to_names(frame, spec.filters)
 
-    if not shutil.which("powershell"):
-        return False, "PowerShell unavailable."
+    if not value_names:
+        raise ValueError("pivot_values cannot be empty.")
 
     pythoncom.CoInitialize()
     excel = None
@@ -343,9 +298,11 @@ def try_create_excel_pivot(
             pivot_table.AddDataField(field, f"Sum of {name}", -4157)
 
         workbook.Save()
-        return True, None
     except Exception as exc:
-        return False, str(exc)
+        raise RuntimeError(
+            "Failed to create a native Excel pivot table. Ensure Microsoft Excel is installed "
+            "and the workbook can be opened locally."
+        ) from exc
     finally:
         if workbook is not None:
             workbook.Close(SaveChanges=True)
@@ -354,22 +311,17 @@ def try_create_excel_pivot(
         pythoncom.CoUninitialize()
 
 
-def append_fallback_pivot_sheet(output_path: Path, pivot_sheet_name: str, pivot_df: pd.DataFrame) -> None:
-    with pd.ExcelWriter(
-        output_path,
-        engine="openpyxl",
-        mode="a",
-        if_sheet_exists="replace",
-    ) as writer:
-        pivot_df.to_excel(writer, index=False, sheet_name=pivot_sheet_name)
-
-
 def main() -> int:
     args = parse_args()
-    input_path = Path(args.input).expanduser().resolve()
+    config = load_config(Path(args.config).expanduser().resolve() if args.config else None)
+
+    input_value = args.input if args.input is not None else config.get("input")
+    if not input_value or not isinstance(input_value, str):
+        raise ValueError("input is required, either via --input or --config.")
+
+    input_path = Path(input_value).expanduser().resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"Input file not found: {input_path}")
-    config = load_config(Path(args.config).expanduser().resolve() if args.config else None)
 
     suffix = args.suffix if args.suffix is not None else config.get("suffix")
     if args.output:
@@ -418,19 +370,14 @@ def main() -> int:
     processed = apply_transforms(frame, transforms)
     save_workbook(processed, output_path, args.data_sheet_name)
 
-    created_pivot, error_message = try_create_excel_pivot(
+    create_excel_pivot_table(
         output_path=output_path,
         data_sheet_name=args.data_sheet_name,
         pivot_sheet_name=args.pivot_sheet_name,
         spec=pivot_spec,
         frame=processed,
     )
-    if not created_pivot:
-        pivot_df = create_pivot_dataframe(processed, pivot_spec)
-        append_fallback_pivot_sheet(output_path, args.pivot_sheet_name, pivot_df)
-        print(f"Created fallback pivot sheet because Excel COM pivot creation failed: {error_message}")
-    else:
-        print("Created native Excel pivot table.")
+    print("Created native Excel pivot table.")
 
     print(f"Saved output to: {output_path}")
     return 0
