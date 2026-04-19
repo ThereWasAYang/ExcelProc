@@ -5,18 +5,18 @@
     ["Time", "time_to_seconds"],
     ["Amount", "double_value"]
   ],
-  "pivot_filters": ["H", "I"],
-  "pivot_rows": ["D", "C"],
-  "pivot_columns": ["J", "K"],
+  "pivot_filters": ["Channel", "Priority"],
+  "pivot_rows": ["Region", "Category"],
+  "pivot_columns": ["Segment", "Quarter"],
   "pivot_value_settings": [
     {
-      "column": "E",
+      "header": "Amount",
       "summary": "sum",
       "name": "Total Amount",
       "number_format": "#,##0"
     },
     {
-      "column": "G",
+      "header": "Score",
       "summary": "average",
       "name": "Average Score",
       "number_format": "0.0"

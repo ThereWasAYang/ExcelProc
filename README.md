@@ -61,10 +61,10 @@ python .\excel_processor.py `
   --input .\inputs\test_input_100rows.csv `
   --suffix DEMO `
   --transforms "[[\"Time\", \"time_to_seconds\"], [\"Amount\", \"double_value\"]]" `
-  --pivot-filters "[\"G\"]" `
-  --pivot-rows "[\"C\"]" `
-  --pivot-columns "[\"B\"]" `
-  --pivot-value-settings "[{\"column\": \"D\", \"summary\": \"sum\", \"name\": \"Total Amount\", \"number_format\": \"#,##0\"}, {\"column\": \"E\", \"summary\": \"average\", \"name\": \"Average Score\", \"number_format\": \"0.0\"}]"
+  --pivot-filters "[\"Channel\", \"Priority\"]" `
+  --pivot-rows "[\"Region\", \"Category\"]" `
+  --pivot-columns "[\"Segment\", \"Quarter\"]" `
+  --pivot-value-settings "[{\"header\": \"Amount\", \"summary\": \"sum\", \"name\": \"Total Amount\", \"number_format\": \"#,##0\"}, {\"header\": \"Score\", \"summary\": \"average\", \"name\": \"Average Score\", \"number_format\": \"0.0\"}]"
 ```
 
 ### 方式二：使用配置文件
@@ -84,12 +84,12 @@ python .\excel_processor.py `
     ["Amount", "double_value"],
     ["Name", "upper_text"]
   ],
-  "pivot_filters": ["A"],
-  "pivot_rows": ["B"],
-  "pivot_columns": ["D"],
+  "pivot_filters": ["Category"],
+  "pivot_rows": ["Region"],
+  "pivot_columns": ["Name"],
   "pivot_value_settings": [
     {
-      "column": "C",
+      "header": "Amount",
       "summary": "sum",
       "name": "Total Amount",
       "number_format": "#,##0.00"
@@ -128,11 +128,11 @@ python .\scripts\generate_test_files.py
 - `--suffix`：未显式指定 `--output` 时，追加到输出文件名后的后缀
 - `--sheet-name`：当输入为 `xlsx` 时，指定读取的源工作表
 - `--transforms`：转换规则 JSON 数组
-- `--pivot-filters`：数据透视表“筛选”区域列字母数组
-- `--pivot-rows`：数据透视表“行”区域列字母数组
-- `--pivot-columns`：数据透视表“列”区域列字母数组
-- `--pivot-values`：数据透视表“值”区域列字母数组
-- `--pivot-value-settings`：数据透视表“值字段设置”数组，支持 `column`、`summary`、`name`、`number_format`
+- `--pivot-filters`：数据透视表“筛选”区域字段数组，默认按表头名称解析
+- `--pivot-rows`：数据透视表“行”区域字段数组，默认按表头名称解析
+- `--pivot-columns`：数据透视表“列”区域字段数组，默认按表头名称解析
+- `--pivot-values`：数据透视表“值”区域字段数组，默认按表头名称解析
+- `--pivot-value-settings`：数据透视表“值字段设置”数组，支持 `header`、`column_letter`、兼容旧字段 `column`、以及 `summary`、`name`、`number_format`
 - `--pivot-sheet-name`：数据透视表工作表名称，默认 `PivotTable`
 - `--data-sheet-name`：输出源数据工作表名称，默认 `SourceData`
 
@@ -147,6 +147,10 @@ python .\scripts\generate_test_files.py
   显式按 Excel 列字母定位
 - 为兼容旧字典配置，`{"column": "Amount", "func": "double_value"}` 仍按“表头”解释
 - 这样可以避免表头恰好叫 `A`、`B` 时与 Excel 列字母产生歧义
+- `pivot_filters`、`pivot_rows`、`pivot_columns`、`pivot_values` 里的字符串现在都默认按表头解释
+- 如果这些透视表字段确实需要按 Excel 列字母定位，请显式写成对象，例如：
+  `{"column_letter": "A"}`
+- `pivot_value_settings` 中推荐写 `{"header": "Amount", ...}`；如果必须按列字母，也可写 `{"column_letter": "C", ...}`
 - 多个转换会按顺序依次执行，后续列字母基于当前表结构计算
 - 当同时提供 `pivot_values` 和 `pivot_value_settings` 时，优先使用 `pivot_value_settings`
 - 当前支持的值汇总方式有：`sum`、`count`、`average`/`avg`、`max`、`min`、`product`

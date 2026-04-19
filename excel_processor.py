@@ -24,10 +24,16 @@ class TransformSpec:
 
 
 @dataclass
+class ColumnRef:
+    value: str
+    mode: str = "header"
+
+
+@dataclass
 class PivotSpec:
-    filters: list[str]
-    rows: list[str]
-    columns: list[str]
+    filters: list[ColumnRef]
+    rows: list[ColumnRef]
+    columns: list[ColumnRef]
     values: list["PivotValueSpec"]
 
 
@@ -37,6 +43,7 @@ class PivotValueSpec:
     summary: str = "sum"
     custom_name: str | None = None
     number_format: str | None = None
+    column_mode: str = "header"
 
 
 def double_value(value: Any) -> Any:
@@ -112,22 +119,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pivot-filters",
         default="[]",
-        help='JSON array of column letters for pivot filters, e.g. ["A"].',
+        help='JSON array of pivot filter headers, e.g. ["Channel"].',
     )
     parser.add_argument(
         "--pivot-rows",
         default="[]",
-        help='JSON array of column letters for pivot rows, e.g. ["B", "C"].',
+        help='JSON array of pivot row headers, e.g. ["Region", "Category"].',
     )
     parser.add_argument(
         "--pivot-columns",
         default="[]",
-        help='JSON array of column letters for pivot columns, e.g. ["D"].',
+        help='JSON array of pivot column headers, e.g. ["Segment"].',
     )
     parser.add_argument(
         "--pivot-values",
         required=False,
-        help='JSON array of column letters for pivot values, e.g. ["E", "F"].',
+        help='JSON array of pivot value headers, e.g. ["Amount", "Score"].',
     )
     parser.add_argument(
         "--pivot-value-settings",
@@ -246,23 +253,39 @@ def normalize_pivot_value_settings(raw: str) -> list[PivotValueSpec]:
                 '{"column": "E", "summary": "sum", "name": "Total E", "number_format": "#,##0.00"}.'
             )
         column = item.get("column")
+        header = item.get("header")
+        column_letter = item.get("column_letter")
         summary = item.get("summary", "sum")
         custom_name = item.get("name")
         number_format = item.get("number_format")
-        if not isinstance(column, str):
-            raise ValueError("pivot value setting column must be a string.")
         if not isinstance(summary, str):
             raise ValueError("pivot value setting summary must be a string.")
         if custom_name is not None and not isinstance(custom_name, str):
             raise ValueError("pivot value setting name must be a string when provided.")
         if number_format is not None and not isinstance(number_format, str):
             raise ValueError("pivot value setting number_format must be a string when provided.")
+
+        if isinstance(header, str):
+            column_value = header
+            column_mode = "header"
+        elif isinstance(column_letter, str):
+            column_value = column_letter
+            column_mode = "column_letter"
+        elif isinstance(column, str):
+            column_value = column
+            column_mode = "header"
+        else:
+            raise ValueError(
+                "pivot value setting must contain 'header', 'column_letter', or legacy 'column'."
+            )
+
         specs.append(
             PivotValueSpec(
-                column=column,
+                column=column_value,
                 summary=summary.strip().lower(),
                 custom_name=custom_name,
                 number_format=number_format,
+                column_mode=column_mode,
             )
         )
     return specs
@@ -286,6 +309,36 @@ def excel_column_to_index(column_ref: str) -> int:
     for char in ref:
         value = value * 26 + (ord(char) - ord("A") + 1)
     return value - 1
+
+
+def normalize_column_refs(raw: str, field_name: str) -> list[ColumnRef]:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{field_name} must be valid JSON.") from exc
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a JSON array.")
+
+    refs: list[ColumnRef] = []
+    for item in value:
+        if isinstance(item, str):
+            refs.append(ColumnRef(value=item, mode="header"))
+            continue
+        if isinstance(item, dict):
+            if isinstance(item.get("header"), str):
+                refs.append(ColumnRef(value=item["header"], mode="header"))
+                continue
+            if isinstance(item.get("column_letter"), str):
+                refs.append(ColumnRef(value=item["column_letter"], mode="column_letter"))
+                continue
+            if isinstance(item.get("column"), str):
+                refs.append(ColumnRef(value=item["column"], mode="header"))
+                continue
+        raise ValueError(
+            f"Each item in {field_name} must be a header string, "
+            '{"header": "ColumnTitle"}, or {"column_letter": "A"}.'
+        )
+    return refs
 
 
 def get_registered_function(func_name: str) -> Callable[[Any], Any]:
@@ -320,6 +373,30 @@ def resolve_transform_column_name(columns: pd.Index, spec: TransformSpec) -> str
     raise ValueError(f"Unsupported transform column mode: {spec.column_mode}")
 
 
+def resolve_column_ref_name(columns: pd.Index, ref: ColumnRef, label: str) -> str:
+    if ref.mode == "header":
+        if columns.duplicated().any():
+            duplicate_names = sorted({str(name) for name in columns[columns.duplicated()]})
+            raise ValueError(
+                f"{label} lookup by title requires unique headers. "
+                f"Duplicate headers found: {', '.join(duplicate_names)}"
+            )
+        if ref.value not in columns:
+            available = ", ".join(map(str, columns))
+            raise KeyError(
+                f"{label} header not found: {ref.value}. Available headers: {available}"
+            )
+        return str(ref.value)
+
+    if ref.mode == "column_letter":
+        source_index = excel_column_to_index(ref.value)
+        if source_index < 0 or source_index >= len(columns):
+            raise IndexError(f"{label} column out of range: {ref.value}")
+        return str(columns[source_index])
+
+    raise ValueError(f"Unsupported {label} mode: {ref.mode}")
+
+
 def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.DataFrame:
     result = frame.copy()
     for spec in specs:
@@ -334,13 +411,10 @@ def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.Data
     return result
 
 
-def column_letters_to_names(frame: pd.DataFrame, letters: list[str]) -> list[str]:
+def column_refs_to_names(frame: pd.DataFrame, refs: list[ColumnRef], label: str) -> list[str]:
     names: list[str] = []
-    for letter in letters:
-        index = excel_column_to_index(letter)
-        if index < 0 or index >= len(frame.columns):
-            raise IndexError(f"Column out of range: {letter}")
-        names.append(str(frame.columns[index]))
+    for ref in refs:
+        names.append(resolve_column_ref_name(frame.columns, ref, label))
     return names
 
 
@@ -359,10 +433,10 @@ def build_pivot_value_specs(
             "pivot_values or pivot_value_settings is required, either via CLI or --config."
         )
 
-    letters = normalize_json_array(pivot_values_raw, "pivot_values")
-    if not letters:
+    refs = normalize_column_refs(pivot_values_raw, "pivot_values")
+    if not refs:
         raise ValueError("pivot_values cannot be empty.")
-    return [PivotValueSpec(column=letter) for letter in letters]
+    return [PivotValueSpec(column=ref.value, column_mode=ref.mode) for ref in refs]
 
 
 def get_pivot_summary_function(summary: str) -> int:
@@ -404,16 +478,20 @@ def create_excel_pivot_table(
             "Creating a native Excel pivot table requires pywin32 in the current Python environment."
         ) from exc
 
-    row_names = column_letters_to_names(frame, spec.rows)
-    column_names = column_letters_to_names(frame, spec.columns)
-    filter_names = column_letters_to_names(frame, spec.filters)
+    row_names = column_refs_to_names(frame, spec.rows, "pivot row")
+    column_names = column_refs_to_names(frame, spec.columns, "pivot column")
+    filter_names = column_refs_to_names(frame, spec.filters, "pivot filter")
 
     if not spec.values:
         raise ValueError("pivot_values cannot be empty.")
 
     value_field_specs: list[tuple[str, PivotValueSpec]] = []
     for value_spec in spec.values:
-        value_name = column_letters_to_names(frame, [value_spec.column])[0]
+        value_name = resolve_column_ref_name(
+            frame.columns,
+            ColumnRef(value=value_spec.column, mode=value_spec.column_mode),
+            "pivot value",
+        )
         value_field_specs.append((value_name, value_spec))
 
     pythoncom.CoInitialize()
@@ -517,19 +595,19 @@ def main() -> int:
 
     transforms = normalize_transforms(transforms_raw)
     pivot_spec = PivotSpec(
-        filters=normalize_json_array(
+        filters=normalize_column_refs(
             args.pivot_filters
             if args.pivot_filters != "[]"
             else json.dumps(config.get("pivot_filters", []), ensure_ascii=False),
             "pivot_filters",
         ),
-        rows=normalize_json_array(
+        rows=normalize_column_refs(
             args.pivot_rows
             if args.pivot_rows != "[]"
             else json.dumps(config.get("pivot_rows", []), ensure_ascii=False),
             "pivot_rows",
         ),
-        columns=normalize_json_array(
+        columns=normalize_column_refs(
             args.pivot_columns
             if args.pivot_columns != "[]"
             else json.dumps(config.get("pivot_columns", []), ensure_ascii=False),

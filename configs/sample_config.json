@@ -5,12 +5,12 @@
     ["Amount", "double_value"],
     ["Name", "upper_text"]
   ],
-  "pivot_filters": ["A"],
-  "pivot_rows": ["B"],
-  "pivot_columns": ["D"],
+  "pivot_filters": ["Category"],
+  "pivot_rows": ["Region"],
+  "pivot_columns": ["Name"],
   "pivot_value_settings": [
     {
-      "column": "C",
+      "header": "Amount",
       "summary": "sum",
       "name": "Total Amount",
       "number_format": "#,##0.00"
