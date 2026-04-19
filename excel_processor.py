@@ -20,6 +20,7 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs"
 class TransformSpec:
     column: str
     func_name: str
+    column_mode: str = "header"
 
 
 @dataclass
@@ -105,7 +106,7 @@ def parse_args() -> argparse.Namespace:
         required=False,
         help=(
             "JSON array, e.g. "
-            '[["Amount", "double_value"], ["Name", "upper_text"]]'
+            '[["Amount", "double_value"], {"column_letter": "C", "func": "double_value"}]'
         ),
     )
     parser.add_argument(
@@ -191,15 +192,40 @@ def normalize_transforms(raw: str) -> list[TransformSpec]:
             and len(item) == 2
             and all(isinstance(part, str) for part in item)
         ):
-            specs.append(TransformSpec(column=item[0], func_name=item[1]))
+            specs.append(TransformSpec(column=item[0], column_mode="header", func_name=item[1]))
             continue
-        if isinstance(item, dict) and isinstance(item.get("column"), str) and isinstance(
-            item.get("func"), str
-        ):
-            specs.append(TransformSpec(column=item["column"], func_name=item["func"]))
-            continue
+        if isinstance(item, dict) and isinstance(item.get("func"), str):
+            if isinstance(item.get("header"), str):
+                specs.append(
+                    TransformSpec(
+                        column=item["header"],
+                        column_mode="header",
+                        func_name=item["func"],
+                    )
+                )
+                continue
+            if isinstance(item.get("column_letter"), str):
+                specs.append(
+                    TransformSpec(
+                        column=item["column_letter"],
+                        column_mode="column_letter",
+                        func_name=item["func"],
+                    )
+                )
+                continue
+            if isinstance(item.get("column"), str):
+                specs.append(
+                    TransformSpec(
+                        column=item["column"],
+                        column_mode="header",
+                        func_name=item["func"],
+                    )
+                )
+                continue
         raise ValueError(
-            'Each transform must be ["ColumnTitle", "function_name"] or {"column": "ColumnTitle", "func": "function_name"}'
+            'Each transform must be ["ColumnTitle", "function_name"], '
+            '{"header": "ColumnTitle", "func": "function_name"}, or '
+            '{"column_letter": "A", "func": "function_name"}.'
         )
     return specs
 
@@ -270,36 +296,34 @@ def get_registered_function(func_name: str) -> Callable[[Any], Any]:
     return func
 
 
-def resolve_transform_column_name(columns: pd.Index, column_ref: str) -> str:
-    if column_ref in columns:
-        return str(column_ref)
+def resolve_transform_column_name(columns: pd.Index, spec: TransformSpec) -> str:
+    if spec.column_mode == "header":
+        if columns.duplicated().any():
+            duplicate_names = sorted({str(name) for name in columns[columns.duplicated()]})
+            raise ValueError(
+                "Transform column lookup by title requires unique headers. "
+                f"Duplicate headers found: {', '.join(duplicate_names)}"
+            )
+        if spec.column not in columns:
+            available = ", ".join(map(str, columns))
+            raise KeyError(
+                f"Transform header not found: {spec.column}. Available headers: {available}"
+            )
+        return str(spec.column)
 
-    if columns.duplicated().any():
-        duplicate_names = sorted({str(name) for name in columns[columns.duplicated()]})
-        raise ValueError(
-            "Transform column lookup by title requires unique headers. "
-            f"Duplicate headers found: {', '.join(duplicate_names)}"
-        )
-
-    try:
-        source_index = excel_column_to_index(column_ref)
-    except ValueError:
-        source_index = -1
-
-    if 0 <= source_index < len(columns):
+    if spec.column_mode == "column_letter":
+        source_index = excel_column_to_index(spec.column)
+        if source_index < 0 or source_index >= len(columns):
+            raise IndexError(f"Transform column out of range: {spec.column}")
         return str(columns[source_index])
 
-    available = ", ".join(map(str, columns))
-    raise KeyError(
-        f"Transform column not found: {column_ref}. "
-        f"Use an existing column title or a valid column letter. Available headers: {available}"
-    )
+    raise ValueError(f"Unsupported transform column mode: {spec.column_mode}")
 
 
 def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.DataFrame:
     result = frame.copy()
     for spec in specs:
-        source_name = resolve_transform_column_name(result.columns, spec.column)
+        source_name = resolve_transform_column_name(result.columns, spec)
         source_index = result.columns.get_loc(source_name)
         if not isinstance(source_index, int):
             raise ValueError(f"Transform column must resolve to a single column: {spec.column}")

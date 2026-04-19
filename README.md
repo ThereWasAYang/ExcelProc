@@ -138,8 +138,15 @@ python .\scripts\generate_test_files.py
 
 ## 说明补充
 
-- `transforms` 中的列定位推荐直接使用表头名称，这样前面插入新列后，后续规则也不会受到列位置变化影响
-- 为兼容旧配置，`transforms` 仍然接受 Excel 风格列字母，如 `A`、`B`、`AA`
+- `transforms` 支持三种写法：
+  `["Amount", "double_value"]`
+  默认按表头 `Amount` 定位
+  `{"header": "Amount", "func": "double_value"}`
+  显式按表头定位
+  `{"column_letter": "C", "func": "double_value"}`
+  显式按 Excel 列字母定位
+- 为兼容旧字典配置，`{"column": "Amount", "func": "double_value"}` 仍按“表头”解释
+- 这样可以避免表头恰好叫 `A`、`B` 时与 Excel 列字母产生歧义
 - 多个转换会按顺序依次执行，后续列字母基于当前表结构计算
 - 当同时提供 `pivot_values` 和 `pivot_value_settings` 时，优先使用 `pivot_value_settings`
 - 当前支持的值汇总方式有：`sum`、`count`、`average`/`avg`、`max`、`min`、`product`
