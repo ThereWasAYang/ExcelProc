@@ -5,7 +5,7 @@
 ## 功能说明
 
 1. 读取 `csv` 或 `xlsx` 文件。
-2. 支持多个 `(X, func)` 转换规则，其中 `X` 推荐使用列标题（第一行表头），`func` 是定义在脚本中的函数名。
+2. 支持多个 `(X, func)` 转换规则，其中 `X` 推荐使用列标题，`func` 是已注册的数据处理函数名。
 3. 无论输入文件是 `csv` 还是 `xlsx`，输出都统一保存为 `xlsx`。
 4. 默认将结果输出到 `outputs/` 目录，文件名格式为 `<原文件名>_<suffix>.xlsx`。
 5. 在输出文件中新建一个 Excel 原生数据透视表工作表。
@@ -16,6 +16,7 @@
 - `configs/`：示例配置和测试配置
 - `outputs/`：输出文件
 - `scripts/`：辅助脚本
+- `processors/`：数据处理函数
 - `excel_processor.py`：主处理脚本
 
 ## 运行环境
@@ -40,9 +41,9 @@ python -m pip install pandas openpyxl pywin32
 
 如果以上条件不满足，脚本会直接报错，不会退化成普通汇总表。
 
-## 转换函数
+## 数据处理函数
 
-`func` 不是 lambda 表达式，而是 [excel_processor.py](E:/Work/Pycharm/ExcelProc/excel_processor.py) 中定义好的函数名。
+数据处理函数现在统一放在 [processors/transform_functions.py](E:/Work/Pycharm/ExcelProc/processors/transform_functions.py) 中管理。
 
 当前内置示例函数：
 
@@ -50,7 +51,49 @@ python -m pip install pandas openpyxl pywin32
 - `upper_text`
 - `time_to_seconds`
 
-如果你有更复杂的业务逻辑，可以继续在主脚本中增加函数，然后在配置文件里引用函数名。
+### 如何添加新的数据处理函数
+
+1. 打开 [processors/transform_functions.py](E:/Work/Pycharm/ExcelProc/processors/transform_functions.py)
+2. 新增一个函数，函数接收单个单元格值作为参数，并返回处理后的结果
+3. 在同文件底部的 `FUNCTION_REGISTRY` 中注册这个函数
+4. 在配置文件里的 `transforms` 中引用注册名
+
+例如，新增一个把字符串前后空格去掉的函数：
+
+```python
+def strip_text(value: Any) -> Any:
+    if pd.isna(value):
+        return value
+    return str(value).strip()
+```
+
+然后把它注册到 `FUNCTION_REGISTRY`：
+
+```python
+FUNCTION_REGISTRY = {
+    "double_value": double_value,
+    "upper_text": upper_text,
+    "time_to_seconds": time_to_seconds,
+    "strip_text": strip_text,
+}
+```
+
+之后就可以在配置文件中这样使用：
+
+```json
+{
+  "transforms": [
+    ["Name", "strip_text"]
+  ]
+}
+```
+
+### 编写函数时的建议
+
+- 优先处理空值，例如使用 `pd.isna(value)`
+- 函数应只处理单个单元格值，不要直接依赖整列 DataFrame
+- 返回值应是可写入 Excel 的普通值类型，如字符串、数字、布尔值或空值
+- 如果函数只适用于特定格式，建议在函数内主动校验并抛出明确错误
 
 ## 使用方式
 
@@ -100,7 +143,7 @@ python .\excel_processor.py `
 
 ## 列索引写法
 
-配置文件中的列索引目前支持两种表示方式：
+配置文件中的列索引目前支持两种表示方式。
 
 ### 方式一：按表头名称
 
@@ -210,7 +253,6 @@ python .\scripts\generate_test_files.py
 - 如果这些透视表字段确实需要按 Excel 列字母定位，请显式写成对象，例如：
   `{"column_letter": "A"}`
 - `pivot_value_settings` 中推荐写 `{"header": "Amount", ...}`；如果必须按列字母，也可写 `{"column_letter": "C", ...}`
-- 多个转换会按顺序依次执行，后续列字母基于当前表结构计算
 - 当同时提供 `pivot_values` 和 `pivot_value_settings` 时，优先使用 `pivot_value_settings`
 - 当前支持的值汇总方式有：`sum`、`count`、`average`/`avg`、`max`、`min`、`product`
 - 输出的数据透视表是 Excel 原生数据透视表，不是 pandas 汇总表
