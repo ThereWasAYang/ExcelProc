@@ -117,7 +117,7 @@ python .\scripts\generate_test_files.py
 
 - 共 100 行
 - 第一列为 `HH:MM:SS` 格式时间
-- 包含 `Channel` 列，可用于验证数据透视表“筛选”区域
+- 包含 `Channel`、`Priority`、`Segment`、`Quarter` 等分类字段，可用于更充分地验证数据透视表的筛选、行、列区域配置
 
 ## 参数说明
 

@@ -2,20 +2,21 @@
   "input": "inputs/test_input_100rows.csv",
   "suffix": "CHECK",
   "transforms": [
-    ["D", "double_value"]
+    ["A", "time_to_seconds"],
+    ["E", "double_value"]
   ],
-  "pivot_filters": ["G"],
-  "pivot_rows": ["C"],
-  "pivot_columns": ["B"],
+  "pivot_filters": ["H", "I"],
+  "pivot_rows": ["D", "C"],
+  "pivot_columns": ["J", "K"],
   "pivot_value_settings": [
     {
-      "column": "D",
+      "column": "E",
       "summary": "sum",
       "name": "Total Amount",
       "number_format": "#,##0"
     },
     {
-      "column": "E",
+      "column": "G",
       "summary": "average",
       "name": "Average Score",
       "number_format": "0.0"

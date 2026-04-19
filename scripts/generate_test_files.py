@@ -15,6 +15,9 @@ def build_test_frame(row_count: int = 100) -> pd.DataFrame:
     categories = ["A", "B", "C", "D"]
     regions = ["East", "West", "North", "South"]
     channels = ["Online", "Store", "Partner"]
+    priorities = ["High", "Medium", "Low"]
+    segments = ["Retail", "Wholesale"]
+    quarters = ["Q1", "Q2", "Q3", "Q4"]
 
     for idx in range(row_count):
         second_of_day = (idx * 137) % 86400
@@ -29,6 +32,9 @@ def build_test_frame(row_count: int = 100) -> pd.DataFrame:
                 "Amount": 100 + idx * 3,
                 "Score": round(60 + (idx % 17) * 1.5, 1),
                 "Channel": channels[idx % len(channels)],
+                "Priority": priorities[idx % len(priorities)],
+                "Segment": segments[(idx // 2) % len(segments)],
+                "Quarter": quarters[(idx // 8) % len(quarters)],
             }
         )
     return pd.DataFrame(rows)
