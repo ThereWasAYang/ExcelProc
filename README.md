@@ -20,17 +20,21 @@
 
 ## 运行环境
 
-项目默认使用 conda 环境 `py312`。
+项目依赖 Python 3.12。
+
+如果你使用 conda、venv 或其他环境管理工具，请在你自己的本地 Python 环境中安装依赖并运行脚本。项目文档不依赖任何固定的环境名称。
 
 ## 依赖安装
 
 ```powershell
-conda run -n py312 python -m pip install pandas openpyxl pywin32
+python -m pip install pandas openpyxl pywin32
 ```
+
+## Excel 依赖说明
 
 数据透视表使用的是 Excel 自带的“插入 -> 数据透视表”能力，因此需要满足以下条件：
 
-- `pywin32` 已安装到 `py312`
+- 当前 Python 环境已安装 `pywin32`
 - 本机已安装 Microsoft Excel
 - 当前环境允许通过 Excel COM 启动 Excel
 
@@ -53,7 +57,7 @@ conda run -n py312 python -m pip install pandas openpyxl pywin32
 ### 方式一：直接传参
 
 ```powershell
-conda run -n py312 python .\excel_processor.py `
+python .\excel_processor.py `
   --input .\inputs\test_input_100rows.csv `
   --suffix DEMO `
   --transforms "[[\"A\", \"time_to_seconds\"], [\"D\", \"double_value\"]]" `
@@ -66,7 +70,7 @@ conda run -n py312 python .\excel_processor.py `
 ### 方式二：使用配置文件
 
 ```powershell
-conda run -n py312 python .\excel_processor.py `
+python .\excel_processor.py `
   --config .\configs\sample_config.json
 ```
 
@@ -101,7 +105,7 @@ conda run -n py312 python .\excel_processor.py `
 执行命令：
 
 ```powershell
-conda run -n py312 python .\scripts\generate_test_files.py
+python .\scripts\generate_test_files.py
 ```
 
 生成文件：
