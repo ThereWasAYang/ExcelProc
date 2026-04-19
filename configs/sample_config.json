@@ -2,8 +2,8 @@
   "input": "inputs/sample.csv",
   "suffix": "TEST",
   "transforms": [
-    ["C", "double_value"],
-    ["E", "upper_text"]
+    ["Amount", "double_value"],
+    ["Name", "upper_text"]
   ],
   "pivot_filters": ["A"],
   "pivot_rows": ["B"],

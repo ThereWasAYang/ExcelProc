@@ -5,7 +5,7 @@
 ## 功能说明
 
 1. 读取 `csv` 或 `xlsx` 文件。
-2. 支持多个 `(X, func)` 转换规则，其中 `X` 是列字母，如 `A`、`B`，`func` 是定义在脚本中的函数名。
+2. 支持多个 `(X, func)` 转换规则，其中 `X` 推荐使用列标题（第一行表头），`func` 是定义在脚本中的函数名。
 3. 无论输入文件是 `csv` 还是 `xlsx`，输出都统一保存为 `xlsx`。
 4. 默认将结果输出到 `outputs/` 目录，文件名格式为 `<原文件名>_<suffix>.xlsx`。
 5. 在输出文件中新建一个 Excel 原生数据透视表工作表。
@@ -60,7 +60,7 @@ python -m pip install pandas openpyxl pywin32
 python .\excel_processor.py `
   --input .\inputs\test_input_100rows.csv `
   --suffix DEMO `
-  --transforms "[[\"A\", \"time_to_seconds\"], [\"D\", \"double_value\"]]" `
+  --transforms "[[\"Time\", \"time_to_seconds\"], [\"Amount\", \"double_value\"]]" `
   --pivot-filters "[\"G\"]" `
   --pivot-rows "[\"C\"]" `
   --pivot-columns "[\"B\"]" `
@@ -81,8 +81,8 @@ python .\excel_processor.py `
   "input": "inputs/sample.csv",
   "suffix": "TEST",
   "transforms": [
-    ["C", "double_value"],
-    ["E", "upper_text"]
+    ["Amount", "double_value"],
+    ["Name", "upper_text"]
   ],
   "pivot_filters": ["A"],
   "pivot_rows": ["B"],
@@ -138,7 +138,8 @@ python .\scripts\generate_test_files.py
 
 ## 说明补充
 
-- 列索引使用 Excel 风格字母，如 `A`、`B`、`AA`
+- `transforms` 中的列定位推荐直接使用表头名称，这样前面插入新列后，后续规则也不会受到列位置变化影响
+- 为兼容旧配置，`transforms` 仍然接受 Excel 风格列字母，如 `A`、`B`、`AA`
 - 多个转换会按顺序依次执行，后续列字母基于当前表结构计算
 - 当同时提供 `pivot_values` 和 `pivot_value_settings` 时，优先使用 `pivot_value_settings`
 - 当前支持的值汇总方式有：`sum`、`count`、`average`/`avg`、`max`、`min`、`product`

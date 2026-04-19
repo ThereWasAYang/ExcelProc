@@ -2,8 +2,8 @@
   "input": "inputs/test_input_100rows.csv",
   "suffix": "CHECK",
   "transforms": [
-    ["A", "time_to_seconds"],
-    ["E", "double_value"]
+    ["Time", "time_to_seconds"],
+    ["Amount", "double_value"]
   ],
   "pivot_filters": ["H", "I"],
   "pivot_rows": ["D", "C"],

@@ -105,7 +105,7 @@ def parse_args() -> argparse.Namespace:
         required=False,
         help=(
             "JSON array, e.g. "
-            '[["A", "double_value"], ["C", "upper_text"]]'
+            '[["Amount", "double_value"], ["Name", "upper_text"]]'
         ),
     )
     parser.add_argument(
@@ -199,7 +199,7 @@ def normalize_transforms(raw: str) -> list[TransformSpec]:
             specs.append(TransformSpec(column=item["column"], func_name=item["func"]))
             continue
         raise ValueError(
-            'Each transform must be ["A", "function_name"] or {"column": "A", "func": "function_name"}'
+            'Each transform must be ["ColumnTitle", "function_name"] or {"column": "ColumnTitle", "func": "function_name"}'
         )
     return specs
 
@@ -270,14 +270,39 @@ def get_registered_function(func_name: str) -> Callable[[Any], Any]:
     return func
 
 
+def resolve_transform_column_name(columns: pd.Index, column_ref: str) -> str:
+    if column_ref in columns:
+        return str(column_ref)
+
+    if columns.duplicated().any():
+        duplicate_names = sorted({str(name) for name in columns[columns.duplicated()]})
+        raise ValueError(
+            "Transform column lookup by title requires unique headers. "
+            f"Duplicate headers found: {', '.join(duplicate_names)}"
+        )
+
+    try:
+        source_index = excel_column_to_index(column_ref)
+    except ValueError:
+        source_index = -1
+
+    if 0 <= source_index < len(columns):
+        return str(columns[source_index])
+
+    available = ", ".join(map(str, columns))
+    raise KeyError(
+        f"Transform column not found: {column_ref}. "
+        f"Use an existing column title or a valid column letter. Available headers: {available}"
+    )
+
+
 def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.DataFrame:
     result = frame.copy()
     for spec in specs:
-        # Each transform uses the current worksheet structure after prior inserts.
-        source_index = excel_column_to_index(spec.column)
-        if source_index < 0 or source_index >= len(result.columns):
-            raise IndexError(f"Column out of range: {spec.column}")
-        source_name = result.columns[source_index]
+        source_name = resolve_transform_column_name(result.columns, spec.column)
+        source_index = result.columns.get_loc(source_name)
+        if not isinstance(source_index, int):
+            raise ValueError(f"Transform column must resolve to a single column: {spec.column}")
         func = get_registered_function(spec.func_name)
         derived_name = f"{source_name}_{spec.func_name}"
         insert_index = source_index + 1
@@ -352,7 +377,7 @@ def create_excel_pivot_table(
         import win32com.client as win32
     except ImportError as exc:
         raise RuntimeError(
-            "Creating a native Excel pivot table requires pywin32 in the py312 environment."
+            "Creating a native Excel pivot table requires pywin32 in the current Python environment."
         ) from exc
 
     row_names = column_letters_to_names(frame, spec.rows)
