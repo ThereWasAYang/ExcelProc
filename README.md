@@ -18,6 +18,7 @@
 - `scripts/`：辅助脚本
 - `processors/`：数据处理函数
 - `excel_processor.py`：主处理脚本
+- `setup_env.bat`：Windows 下一键配置环境脚本
 
 ## 运行环境
 
@@ -30,6 +31,28 @@
 ```powershell
 python -m pip install pandas openpyxl pywin32
 ```
+
+## 一键配置环境
+
+如果项目使用者不熟悉 Python 环境配置，建议直接双击运行：
+
+[setup_env.bat](E:/Work/Pycharm/ExcelProc/setup_env.bat)
+
+这个脚本会自动完成以下操作：
+
+1. 检测本机可用的 Python
+2. 在项目目录下创建虚拟环境 `.venv`
+3. 自动升级 `pip`
+4. 自动安装 `requirements.txt` 中的依赖
+5. 自动创建 `inputs`、`configs`、`outputs` 目录（如果缺失）
+
+运行完成后，可以直接使用下面的命令启动项目：
+
+```powershell
+.venv\Scripts\python.exe .\excel_processor.py --config .\configs\sample_config.json
+```
+
+如果双击脚本时提示没有 Python，需要先在电脑上安装 Python 3.12 或更高版本。
 
 ## Excel 依赖说明
 
