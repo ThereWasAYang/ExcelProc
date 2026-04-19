@@ -98,6 +98,65 @@ python .\excel_processor.py `
 }
 ```
 
+## 列索引写法
+
+配置文件中的列索引目前支持两种表示方式：
+
+### 方式一：按表头名称
+
+这是推荐写法，含义最直接，也不会因为前面插入新列而影响后续规则。
+
+```json
+{
+  "transforms": [
+    ["Amount", "double_value"],
+    {"header": "Name", "func": "upper_text"}
+  ],
+  "pivot_filters": ["Channel", "Priority"],
+  "pivot_rows": ["Region", "Category"],
+  "pivot_columns": ["Segment", "Quarter"],
+  "pivot_value_settings": [
+    {
+      "header": "Amount",
+      "summary": "sum",
+      "name": "Total Amount"
+    }
+  ]
+}
+```
+
+### 方式二：按 Excel 列字母
+
+如果你确实希望按原始列位置指定，可以显式写成 `column_letter`。
+
+```json
+{
+  "transforms": [
+    {"column_letter": "A", "func": "time_to_seconds"},
+    {"column_letter": "D", "func": "double_value"}
+  ],
+  "pivot_filters": [
+    {"column_letter": "G"},
+    {"column_letter": "H"}
+  ],
+  "pivot_rows": [
+    {"column_letter": "C"},
+    {"column_letter": "B"}
+  ],
+  "pivot_columns": [
+    {"column_letter": "I"},
+    {"column_letter": "J"}
+  ],
+  "pivot_value_settings": [
+    {
+      "column_letter": "D",
+      "summary": "sum",
+      "name": "Total Amount"
+    }
+  ]
+}
+```
+
 ## 测试数据
 
 [scripts/generate_test_files.py](E:/Work/Pycharm/ExcelProc/scripts/generate_test_files.py) 仅用于生成测试样本。
