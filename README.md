@@ -5,10 +5,11 @@
 ## 功能说明
 
 1. 读取 `csv` 或 `xlsx` 文件。
-2. 支持多个 `(X, func)` 转换规则，其中 `X` 推荐使用列标题，`func` 是已注册的数据处理函数名。
-3. 无论输入文件是 `csv` 还是 `xlsx`，输出都统一保存为 `xlsx`。
-4. 默认将结果输出到 `outputs/` 目录，文件名格式为 `<原文件名>_<suffix>.xlsx`。
+2. 根据配置中的 `transforms` 对指定列逐行执行数据处理函数，并在源列右侧插入结果列。
+3. 新插入列可以在配置中指定列标题和小数位数。
+4. 无论输入文件是 `csv` 还是 `xlsx`，输出都统一保存为 `xlsx`。
 5. 在输出文件中新建一个 Excel 原生数据透视表工作表。
+6. 数据透视表值字段可以配置汇总方式、显示名称和小数位数。
 
 ## 目录结构
 
@@ -19,18 +20,6 @@
 - `processors/`：数据处理函数
 - `excel_processor.py`：主处理脚本
 - `setup_env.bat`：Windows 下一键配置环境脚本
-
-## 运行环境
-
-项目依赖 Python 3.12。
-
-如果你使用 conda、venv 或其他环境管理工具，请在你自己的本地 Python 环境中安装依赖并运行脚本。项目文档不依赖任何固定的环境名称。
-
-## 依赖安装
-
-```powershell
-python -m pip install pandas openpyxl pywin32
-```
 
 ## 一键配置环境
 
@@ -54,7 +43,13 @@ python -m pip install pandas openpyxl pywin32
 
 如果双击脚本时提示没有 Python，需要先在电脑上安装 Python 3.12 或更高版本。
 
-## Excel 依赖说明
+## 依赖安装
+
+如果不使用一键脚本，也可以自行安装依赖：
+
+```powershell
+python -m pip install pandas openpyxl pywin32
+```
 
 数据透视表使用的是 Excel 自带的“插入 -> 数据透视表”能力，因此需要满足以下条件：
 
@@ -64,9 +59,63 @@ python -m pip install pandas openpyxl pywin32
 
 如果以上条件不满足，脚本会直接报错，不会退化成普通汇总表。
 
+## 配置文件
+
+配置文件放在 `configs/` 目录。虽然文件扩展名仍是 `.json`，但脚本支持在配置文件中写 `//` 单行注释和 `/* ... */` 多行注释，便于说明每个参数的含义。
+
+示例配置：
+
+[configs/sample_config.json](E:/Work/Pycharm/ExcelProc/configs/sample_config.json)
+
+测试配置：
+
+[configs/test_config.json](E:/Work/Pycharm/ExcelProc/configs/test_config.json)
+
+## transforms 配置
+
+`transforms` 用于描述“从哪一列取值、调用哪个函数、把结果列插入到哪里”。
+
+推荐写法：
+
+```json
+{
+  "transforms": [
+    {
+      "header": "Amount",
+      "func": "double_value",
+      "title": "Amount Double",
+      "decimals": 0
+    }
+  ]
+}
+```
+
+字段说明：
+
+- `header`：按表头名称定位源列
+- `column_letter`：按 Excel 列字母定位源列，例如 `A`、`B`、`AA`
+- `func`：数据处理函数名，必须已经注册到 `FUNCTION_REGISTRY`
+- `title`：新插入列的列标题；不写时默认使用 `<源列标题>_<函数名>`
+- `decimals`：新插入列的小数位数；为 `0` 时结果会自动转为整数
+
+按 Excel 列字母定位的写法：
+
+```json
+{
+  "transforms": [
+    {
+      "column_letter": "D",
+      "func": "double_value",
+      "title": "Amount Double",
+      "decimals": 0
+    }
+  ]
+}
+```
+
 ## 数据处理函数
 
-数据处理函数现在统一放在 [processors/transform_functions.py](E:/Work/Pycharm/ExcelProc/processors/transform_functions.py) 中管理。
+数据处理函数统一放在 [processors/transform_functions.py](E:/Work/Pycharm/ExcelProc/processors/transform_functions.py) 中管理。
 
 当前内置示例函数：
 
@@ -106,78 +155,28 @@ FUNCTION_REGISTRY = {
 ```json
 {
   "transforms": [
-    ["Name", "strip_text"]
+    {
+      "header": "Name",
+      "func": "strip_text",
+      "title": "Clean Name"
+    }
   ]
 }
 ```
 
-### 编写函数时的建议
+编写函数时建议：
 
 - 优先处理空值，例如使用 `pd.isna(value)`
 - 函数应只处理单个单元格值，不要直接依赖整列 DataFrame
 - 返回值应是可写入 Excel 的普通值类型，如字符串、数字、布尔值或空值
 - 如果函数只适用于特定格式，建议在函数内主动校验并抛出明确错误
 
-## 使用方式
+## 数据透视表配置
 
-### 方式一：直接传参
-
-```powershell
-python .\excel_processor.py `
-  --input .\inputs\test_input_100rows.csv `
-  --suffix DEMO `
-  --transforms "[[\"Time\", \"time_to_seconds\"], [\"Amount\", \"double_value\"]]" `
-  --pivot-filters "[\"Channel\", \"Priority\"]" `
-  --pivot-rows "[\"Region\", \"Category\"]" `
-  --pivot-columns "[\"Segment\", \"Quarter\"]" `
-  --pivot-value-settings "[{\"header\": \"Amount\", \"summary\": \"sum\", \"name\": \"Total Amount\", \"number_format\": \"#,##0\"}, {\"header\": \"Score\", \"summary\": \"average\", \"name\": \"Average Score\", \"number_format\": \"0.0\"}]"
-```
-
-### 方式二：使用配置文件
-
-```powershell
-python .\excel_processor.py `
-  --config .\configs\sample_config.json
-```
-
-## 配置示例
+透视表字段默认按表头名称定位：
 
 ```json
 {
-  "input": "inputs/sample.csv",
-  "suffix": "TEST",
-  "transforms": [
-    ["Amount", "double_value"],
-    ["Name", "upper_text"]
-  ],
-  "pivot_filters": ["Category"],
-  "pivot_rows": ["Region"],
-  "pivot_columns": ["Name"],
-  "pivot_value_settings": [
-    {
-      "header": "Amount",
-      "summary": "sum",
-      "name": "Total Amount",
-      "number_format": "#,##0.00"
-    }
-  ]
-}
-```
-
-## 列索引写法
-
-配置文件中的列索引目前支持两种表示方式。
-
-### 方式一：按表头名称
-
-这是推荐写法，含义最直接，也不会因为前面插入新列而影响后续规则。
-
-```json
-{
-  "transforms": [
-    ["Amount", "double_value"],
-    {"header": "Name", "func": "upper_text"}
-  ],
   "pivot_filters": ["Channel", "Priority"],
   "pivot_rows": ["Region", "Category"],
   "pivot_columns": ["Segment", "Quarter"],
@@ -185,42 +184,87 @@ python .\excel_processor.py `
     {
       "header": "Amount",
       "summary": "sum",
-      "name": "Total Amount"
+      "name": "Total Amount",
+      "decimals": 0
+    },
+    {
+      "header": "Score",
+      "summary": "average",
+      "name": "Average Score",
+      "decimals": 1
     }
   ]
 }
 ```
 
-### 方式二：按 Excel 列字母
+透视表字段说明：
 
-如果你确实希望按原始列位置指定，可以显式写成 `column_letter`。
+- `pivot_filters`：数据透视表“筛选”区域字段
+- `pivot_rows`：数据透视表“行”区域字段
+- `pivot_columns`：数据透视表“列”区域字段
+- `pivot_values`：数据透视表“值”区域字段，简单场景可用
+- `pivot_value_settings`：数据透视表“值字段设置”，推荐使用
+
+`pivot_value_settings` 字段说明：
+
+- `header`：按表头名称定位值字段
+- `column_letter`：按 Excel 列字母定位值字段
+- `summary`：汇总方式，支持 `sum`、`count`、`average`/`avg`、`max`、`min`、`product`
+- `name`：数据透视表中显示的值字段名称
+- `number_format`：Excel 数字格式，例如 `#,##0.00`
+- `decimals`：值字段显示的小数位数；为 `0` 时显示为整数
+
+如果同时设置了 `decimals` 和 `number_format`，优先使用 `decimals` 自动生成格式。
+
+按 Excel 列字母定位的示例：
 
 ```json
 {
-  "transforms": [
-    {"column_letter": "A", "func": "time_to_seconds"},
-    {"column_letter": "D", "func": "double_value"}
-  ],
   "pivot_filters": [
-    {"column_letter": "G"},
-    {"column_letter": "H"}
-  ],
-  "pivot_rows": [
-    {"column_letter": "C"},
-    {"column_letter": "B"}
-  ],
-  "pivot_columns": [
-    {"column_letter": "I"},
-    {"column_letter": "J"}
+    {"column_letter": "G"}
   ],
   "pivot_value_settings": [
     {
-      "column_letter": "D",
+      "column_letter": "E",
       "summary": "sum",
-      "name": "Total Amount"
+      "name": "Total Amount",
+      "decimals": 0
     }
   ]
 }
+```
+
+## 小数位控制
+
+项目支持两类小数位控制：
+
+1. `transforms[].decimals`：控制新插入列的数据小数位
+2. `pivot_value_settings[].decimals`：控制数据透视表值字段显示的小数位
+
+当 `decimals` 设置为 `0` 时：
+
+- 新插入列的结果会转为整数
+- 数据透视表值字段会使用整数格式显示
+
+## 使用方式
+
+### 使用配置文件运行
+
+```powershell
+python .\excel_processor.py --config .\configs\sample_config.json
+```
+
+### 直接传参运行
+
+```powershell
+python .\excel_processor.py `
+  --input .\inputs\test_input_100rows.csv `
+  --suffix DEMO `
+  --transforms "[{\"header\": \"Time\", \"func\": \"time_to_seconds\", \"title\": \"Time Seconds\", \"decimals\": 0}, {\"header\": \"Amount\", \"func\": \"double_value\", \"title\": \"Amount Double\", \"decimals\": 0}]" `
+  --pivot-filters "[\"Channel\", \"Priority\"]" `
+  --pivot-rows "[\"Region\", \"Category\"]" `
+  --pivot-columns "[\"Segment\", \"Quarter\"]" `
+  --pivot-value-settings "[{\"header\": \"Amount\", \"summary\": \"sum\", \"name\": \"Total Amount\", \"decimals\": 0}, {\"header\": \"Score\", \"summary\": \"average\", \"name\": \"Average Score\", \"decimals\": 1}]"
 ```
 
 ## 测试数据
@@ -243,39 +287,3 @@ python .\scripts\generate_test_files.py
 - 共 100 行
 - 第一列为 `HH:MM:SS` 格式时间
 - 包含 `Channel`、`Priority`、`Segment`、`Quarter` 等分类字段，可用于更充分地验证数据透视表的筛选、行、列区域配置
-
-## 参数说明
-
-- `--input`：输入文件路径，支持 `csv/xlsx`，也可以写在 `--config` 中
-- `--config`：JSON 配置文件
-  示例路径：`configs/sample_config.json`
-- `--output`：显式指定输出 `.xlsx` 路径
-- `--suffix`：未显式指定 `--output` 时，追加到输出文件名后的后缀
-- `--sheet-name`：当输入为 `xlsx` 时，指定读取的源工作表
-- `--transforms`：转换规则 JSON 数组
-- `--pivot-filters`：数据透视表“筛选”区域字段数组，默认按表头名称解析
-- `--pivot-rows`：数据透视表“行”区域字段数组，默认按表头名称解析
-- `--pivot-columns`：数据透视表“列”区域字段数组，默认按表头名称解析
-- `--pivot-values`：数据透视表“值”区域字段数组，默认按表头名称解析
-- `--pivot-value-settings`：数据透视表“值字段设置”数组，支持 `header`、`column_letter`、兼容旧字段 `column`、以及 `summary`、`name`、`number_format`
-- `--pivot-sheet-name`：数据透视表工作表名称，默认 `PivotTable`
-- `--data-sheet-name`：输出源数据工作表名称，默认 `SourceData`
-
-## 说明补充
-
-- `transforms` 支持三种写法：
-  `["Amount", "double_value"]`
-  默认按表头 `Amount` 定位
-  `{"header": "Amount", "func": "double_value"}`
-  显式按表头定位
-  `{"column_letter": "C", "func": "double_value"}`
-  显式按 Excel 列字母定位
-- 为兼容旧字典配置，`{"column": "Amount", "func": "double_value"}` 仍按“表头”解释
-- 这样可以避免表头恰好叫 `A`、`B` 时与 Excel 列字母产生歧义
-- `pivot_filters`、`pivot_rows`、`pivot_columns`、`pivot_values` 里的字符串现在都默认按表头解释
-- 如果这些透视表字段确实需要按 Excel 列字母定位，请显式写成对象，例如：
-  `{"column_letter": "A"}`
-- `pivot_value_settings` 中推荐写 `{"header": "Amount", ...}`；如果必须按列字母，也可写 `{"column_letter": "C", ...}`
-- 当同时提供 `pivot_values` 和 `pivot_value_settings` 时，优先使用 `pivot_value_settings`
-- 当前支持的值汇总方式有：`sum`、`count`、`average`/`avg`、`max`、`min`、`product`
-- 输出的数据透视表是 Excel 原生数据透视表，不是 pandas 汇总表

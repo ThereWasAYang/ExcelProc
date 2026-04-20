@@ -1,19 +1,49 @@
 {
+  // input：待处理的输入文件路径，支持 csv 或 xlsx
   "input": "inputs/sample.csv",
+
+  // suffix：未显式指定 --output 时，输出文件名追加的后缀
   "suffix": "TEST",
+
+  // transforms：数据处理规则数组；每条规则会在源列右侧插入一个新列
   "transforms": [
-    ["Amount", "double_value"],
-    ["Name", "upper_text"]
+    {
+      // header：按表头名称定位源列
+      "header": "Amount",
+      // func：在 processors/transform_functions.py 中注册的数据处理函数名
+      "func": "double_value",
+      // title：新插入列的列标题
+      "title": "Amount Double",
+      // decimals：新插入列的小数位数；为 0 时结果会转为整数
+      "decimals": 0
+    },
+    {
+      "header": "Name",
+      "func": "upper_text",
+      "title": "Upper Name"
+    }
   ],
+
+  // pivot_filters：数据透视表“筛选”区域字段，字符串默认按表头名称定位
   "pivot_filters": ["Category"],
+
+  // pivot_rows：数据透视表“行”区域字段
   "pivot_rows": ["Region"],
+
+  // pivot_columns：数据透视表“列”区域字段
   "pivot_columns": ["Name"],
+
+  // pivot_value_settings：数据透视表“值”区域字段及“值字段设置”
   "pivot_value_settings": [
     {
+      // header：按表头名称定位值字段
       "header": "Amount",
+      // summary：汇总方式，支持 sum/count/average/avg/max/min/product
       "summary": "sum",
+      // name：数据透视表中显示的值字段名称
       "name": "Total Amount",
-      "number_format": "#,##0.00"
+      // decimals：数据透视表值字段显示的小数位数；为 0 时显示为整数
+      "decimals": 2
     }
   ]
 }

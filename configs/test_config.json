@@ -1,25 +1,50 @@
 {
+  // input：测试输入文件路径
   "input": "inputs/test_input_100rows.csv",
+
+  // suffix：测试输出文件名后缀
   "suffix": "CHECK",
+
+  // transforms：每条规则以某一列为输入，计算后在该列右侧插入新列
   "transforms": [
-    ["Time", "time_to_seconds"],
-    ["Amount", "double_value"]
+    {
+      // 将 Time 列的 HH:MM:SS 转为秒数
+      "header": "Time",
+      "func": "time_to_seconds",
+      "title": "Time Seconds",
+      "decimals": 0
+    },
+    {
+      // 将 Amount 列乘以 2
+      "header": "Amount",
+      "func": "double_value",
+      "title": "Amount Double",
+      "decimals": 0
+    }
   ],
+
+  // pivot_filters：数据透视表“筛选”区域字段
   "pivot_filters": ["Channel", "Priority"],
+
+  // pivot_rows：数据透视表“行”区域字段
   "pivot_rows": ["Region", "Category"],
+
+  // pivot_columns：数据透视表“列”区域字段
   "pivot_columns": ["Segment", "Quarter"],
+
+  // pivot_value_settings：数据透视表“值”区域字段设置
   "pivot_value_settings": [
     {
       "header": "Amount",
       "summary": "sum",
       "name": "Total Amount",
-      "number_format": "#,##0"
+      "decimals": 0
     },
     {
       "header": "Score",
       "summary": "average",
       "name": "Average Score",
-      "number_format": "0.0"
+      "decimals": 1
     }
   ]
 }

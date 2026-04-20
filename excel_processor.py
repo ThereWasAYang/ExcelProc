@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import numbers
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,8 @@ class TransformSpec:
     column: str
     func_name: str
     column_mode: str = "header"
+    title: str | None = None
+    decimals: int | None = None
 
 
 @dataclass
@@ -46,6 +49,7 @@ class PivotValueSpec:
     custom_name: str | None = None
     number_format: str | None = None
     column_mode: str = "header"
+    decimals: int | None = None
 
 PIVOT_SUMMARY_FUNCTIONS = {
     "sum": -4157,
@@ -156,6 +160,78 @@ def normalize_json_array(raw: str, field_name: str) -> list[str]:
     return value
 
 
+def strip_json_comments(text: str) -> str:
+    result: list[str] = []
+    in_string = False
+    escape = False
+    index = 0
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+
+        if in_string:
+            result.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+
+        if char == '"':
+            in_string = True
+            result.append(char)
+            index += 1
+            continue
+
+        if char == "/" and next_char == "/":
+            index += 2
+            while index < len(text) and text[index] not in "\r\n":
+                index += 1
+            continue
+
+        if char == "/" and next_char == "*":
+            index += 2
+            while index + 1 < len(text) and not (text[index] == "*" and text[index + 1] == "/"):
+                index += 1
+            index += 2
+            continue
+
+        result.append(char)
+        index += 1
+
+    return "".join(result)
+
+
+def normalize_non_negative_int(value: Any, field_name: str) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{field_name} must be a non-negative integer.")
+    return value
+
+
+def apply_decimal_places(value: Any, decimals: int | None) -> Any:
+    if decimals is None or pd.isna(value):
+        return value
+    if isinstance(value, numbers.Real) and not isinstance(value, bool):
+        rounded = round(float(value), decimals)
+        if decimals == 0:
+            return int(rounded)
+        return rounded
+    return value
+
+
+def number_format_from_decimals(decimals: int | None) -> str | None:
+    if decimals is None:
+        return None
+    if decimals == 0:
+        return "#,##0"
+    return "#,##0." + ("0" * decimals)
+
+
 def normalize_transforms(raw: str) -> list[TransformSpec]:
     try:
         value = json.loads(raw)
@@ -174,12 +250,18 @@ def normalize_transforms(raw: str) -> list[TransformSpec]:
             specs.append(TransformSpec(column=item[0], column_mode="header", func_name=item[1]))
             continue
         if isinstance(item, dict) and isinstance(item.get("func"), str):
+            title = item.get("title")
+            if title is not None and not isinstance(title, str):
+                raise ValueError("transform title must be a string when provided.")
+            decimals = normalize_non_negative_int(item.get("decimals"), "transform decimals")
             if isinstance(item.get("header"), str):
                 specs.append(
                     TransformSpec(
                         column=item["header"],
                         column_mode="header",
                         func_name=item["func"],
+                        title=title,
+                        decimals=decimals,
                     )
                 )
                 continue
@@ -189,6 +271,8 @@ def normalize_transforms(raw: str) -> list[TransformSpec]:
                         column=item["column_letter"],
                         column_mode="column_letter",
                         func_name=item["func"],
+                        title=title,
+                        decimals=decimals,
                     )
                 )
                 continue
@@ -198,6 +282,8 @@ def normalize_transforms(raw: str) -> list[TransformSpec]:
                         column=item["column"],
                         column_mode="header",
                         func_name=item["func"],
+                        title=title,
+                        decimals=decimals,
                     )
                 )
                 continue
@@ -230,6 +316,7 @@ def normalize_pivot_value_settings(raw: str) -> list[PivotValueSpec]:
         summary = item.get("summary", "sum")
         custom_name = item.get("name")
         number_format = item.get("number_format")
+        decimals = normalize_non_negative_int(item.get("decimals"), "pivot value decimals")
         if not isinstance(summary, str):
             raise ValueError("pivot value setting summary must be a string.")
         if custom_name is not None and not isinstance(custom_name, str):
@@ -258,6 +345,7 @@ def normalize_pivot_value_settings(raw: str) -> list[PivotValueSpec]:
                 custom_name=custom_name,
                 number_format=number_format,
                 column_mode=column_mode,
+                decimals=decimals,
             )
         )
     return specs
@@ -267,7 +355,7 @@ def load_config(config_path: Path | None) -> dict[str, Any]:
     if config_path is None:
         return {}
     with config_path.open("r", encoding="utf-8") as fh:
-        data = json.load(fh)
+        data = json.loads(strip_json_comments(fh.read()))
     if not isinstance(data, dict):
         raise ValueError("Config file must contain a JSON object.")
     return data
@@ -377,9 +465,13 @@ def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.Data
         if not isinstance(source_index, int):
             raise ValueError(f"Transform column must resolve to a single column: {spec.column}")
         func = get_registered_function(spec.func_name)
-        derived_name = f"{source_name}_{spec.func_name}"
+        derived_name = spec.title or f"{source_name}_{spec.func_name}"
         insert_index = source_index + 1
-        result.insert(insert_index, derived_name, result[source_name].apply(func))
+        result.insert(
+            insert_index,
+            derived_name,
+            result[source_name].apply(func).apply(lambda value: apply_decimal_places(value, spec.decimals)),
+        )
     return result
 
 
@@ -513,8 +605,9 @@ def create_excel_pivot_table(
                 value_spec.custom_name or default_data_field_name(source_name, value_spec.summary),
                 get_pivot_summary_function(value_spec.summary),
             )
-            if value_spec.number_format:
-                data_field.NumberFormat = value_spec.number_format
+            number_format = number_format_from_decimals(value_spec.decimals) or value_spec.number_format
+            if number_format:
+                data_field.NumberFormat = number_format
 
         workbook.Save()
     except Exception as exc:
