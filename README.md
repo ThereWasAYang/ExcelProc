@@ -38,7 +38,7 @@
 运行完成后，可以直接使用下面的命令启动项目：
 
 ```powershell
-.venv\Scripts\python.exe .\excel_processor.py --config .\configs\sample_config.json
+.venv\Scripts\python.exe .\excel_processor.py --config .\configs\sample_config.jsonc
 ```
 
 如果双击脚本时提示没有 Python，需要先在电脑上安装 Python 3.12 或更高版本。
@@ -61,15 +61,15 @@ python -m pip install pandas openpyxl pywin32
 
 ## 配置文件
 
-配置文件放在 `configs/` 目录。虽然文件扩展名仍是 `.json`，但脚本支持在配置文件中写 `//` 单行注释和 `/* ... */` 多行注释，便于说明每个参数的含义。
+配置文件放在 `configs/` 目录，扩展名使用 `.jsonc`。脚本支持在配置文件中写 `//` 单行注释和 `/* ... */` 多行注释，VS Code 等编辑器也能按 JSONC 正确识别，不会再把注释标红。
 
 示例配置：
 
-[configs/sample_config.json](E:/Work/Pycharm/ExcelProc/configs/sample_config.json)
+[configs/sample_config.jsonc](E:/Work/Pycharm/ExcelProc/configs/sample_config.jsonc)
 
 测试配置：
 
-[configs/test_config.json](E:/Work/Pycharm/ExcelProc/configs/test_config.json)
+[configs/test_config.jsonc](E:/Work/Pycharm/ExcelProc/configs/test_config.jsonc)
 
 ## transforms 配置
 
@@ -251,7 +251,7 @@ FUNCTION_REGISTRY = {
 ### 使用配置文件运行
 
 ```powershell
-python .\excel_processor.py --config .\configs\sample_config.json
+python .\excel_processor.py --config .\configs\sample_config.jsonc
 ```
 
 ### 直接传参运行

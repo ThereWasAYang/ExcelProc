@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", help="Input csv/xlsx path.")
     parser.add_argument(
         "--config",
-        help="Optional JSON config file. Supported keys: input, suffix, transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values, pivot_value_settings.",
+        help="Optional JSON/JSONC config file. Supported keys: input, suffix, transforms, pivot_filters, pivot_rows, pivot_columns, pivot_values, pivot_value_settings.",
     )
     parser.add_argument(
         "--output",

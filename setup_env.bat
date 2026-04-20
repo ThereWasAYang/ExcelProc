@@ -85,7 +85,7 @@ echo 虚拟环境位置：
 echo   .venv
 echo.
 echo 以后可使用以下命令运行：
-echo   .venv\Scripts\python.exe .\excel_processor.py --config .\configs\sample_config.json
+echo   .venv\Scripts\python.exe .\excel_processor.py --config .\configs\sample_config.jsonc
 echo.
 echo 如果你使用命令行，也可以先激活环境：
 echo   .venv\Scripts\activate
