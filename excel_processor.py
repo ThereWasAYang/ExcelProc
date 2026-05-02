@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import numbers
 import sys
@@ -10,7 +11,9 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from processors import FUNCTION_REGISTRY
+from pandas.api.types import is_numeric_dtype
+
+from processors import FUNCTION_REGISTRY, VECTOR_FUNCTION_REGISTRY
 
 
 EXCEL_EXTENSIONS = {".xlsx", ".xlsm", ".xltx", ".xltm"}
@@ -146,7 +149,8 @@ def save_workbook(base_frame: pd.DataFrame, output_path: Path, data_sheet_name: 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         output_path.unlink()
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+    engine = "xlsxwriter" if importlib.util.find_spec("xlsxwriter") else "openpyxl"
+    with pd.ExcelWriter(output_path, engine=engine) as writer:
         base_frame.to_excel(writer, index=False, sheet_name=data_sheet_name)
 
 
@@ -222,6 +226,17 @@ def apply_decimal_places(value: Any, decimals: int | None) -> Any:
             return int(rounded)
         return rounded
     return value
+
+
+def apply_decimal_places_to_series(series: pd.Series, decimals: int | None) -> pd.Series:
+    if decimals is None:
+        return series
+    if is_numeric_dtype(series):
+        rounded = series.round(decimals)
+        if decimals == 0:
+            return rounded.astype("Int64") if rounded.isna().any() else rounded.astype("int64")
+        return rounded
+    return series.map(lambda value: apply_decimal_places(value, decimals))
 
 
 def number_format_from_decimals(decimals: int | None) -> str | None:
@@ -409,6 +424,10 @@ def get_registered_function(func_name: str) -> Callable[[Any], Any]:
     return func
 
 
+def get_registered_vector_function(func_name: str) -> Callable[[pd.Series], pd.Series] | None:
+    return VECTOR_FUNCTION_REGISTRY.get(func_name)
+
+
 def resolve_transform_column_name(columns: pd.Index, spec: TransformSpec) -> str:
     if spec.column_mode == "header":
         if columns.duplicated().any():
@@ -465,12 +484,22 @@ def apply_transforms(frame: pd.DataFrame, specs: list[TransformSpec]) -> pd.Data
         if not isinstance(source_index, int):
             raise ValueError(f"Transform column must resolve to a single column: {spec.column}")
         func = get_registered_function(spec.func_name)
+        vector_func = get_registered_vector_function(spec.func_name)
         derived_name = spec.title or f"{source_name}_{spec.func_name}"
         insert_index = source_index + 1
+        if vector_func is not None:
+            transformed = vector_func(result[source_name])
+            if not isinstance(transformed, pd.Series) or len(transformed) != len(result):
+                raise ValueError(
+                    f"Vector transform function must return a Series with {len(result)} rows: "
+                    f"{spec.func_name}"
+                )
+        else:
+            transformed = result[source_name].map(func)
         result.insert(
             insert_index,
             derived_name,
-            result[source_name].apply(func).apply(lambda value: apply_decimal_places(value, spec.decimals)),
+            apply_decimal_places_to_series(transformed, spec.decimals),
         )
     return result
 

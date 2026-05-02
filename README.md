@@ -48,7 +48,7 @@
 如果不使用一键脚本，也可以自行安装依赖：
 
 ```powershell
-python -m pip install pandas openpyxl pywin32
+python -m pip install pandas openpyxl pywin32 xlsxwriter
 ```
 
 数据透视表使用的是 Excel 自带的“插入 -> 数据透视表”能力，因此需要满足以下条件：
@@ -164,6 +164,36 @@ FUNCTION_REGISTRY = {
 }
 ```
 
+### 如何为大文件添加整列处理函数
+
+对于 10 万行这类较大的文件，逐行调用 Python 函数会明显变慢。如果某个处理逻辑可以一次处理整列数据，建议同时注册一个整列版本到 `VECTOR_FUNCTION_REGISTRY`。
+
+例如，`upper_text` 的逐单元格版本是：
+
+```python
+def upper_text(value: Any) -> Any:
+    if pd.isna(value):
+        return value
+    return str(value).upper()
+```
+
+它的整列版本是：
+
+```python
+def upper_text_series(series: pd.Series) -> pd.Series:
+    return series.astype("string").str.upper()
+```
+
+然后注册：
+
+```python
+VECTOR_FUNCTION_REGISTRY = {
+    "upper_text": upper_text_series,
+}
+```
+
+脚本会优先使用 `VECTOR_FUNCTION_REGISTRY` 中的整列函数；没有整列函数时，会自动使用 `FUNCTION_REGISTRY` 中的逐单元格函数。
+
 编写函数时建议：
 
 - 优先处理空值，例如使用 `pd.isna(value)`
@@ -245,6 +275,17 @@ FUNCTION_REGISTRY = {
 
 - 新插入列的结果会转为整数
 - 数据透视表值字段会使用整数格式显示
+
+## 大文件性能
+
+处理大文件时，耗时主要来自三部分：读取源文件、执行 `transforms`、写出 `.xlsx` 并通过 Excel 创建原生数据透视表。
+
+当前脚本已经做了两类优化：
+
+- 内置函数 `double_value`、`upper_text`、`time_to_seconds` 已提供整列处理版本，处理 10 万行时会优先走 pandas 向量化路径。
+- 写出 `.xlsx` 时会优先使用 `xlsxwriter`，通常比 `openpyxl` 写大文件更快；如果环境没有安装 `xlsxwriter`，脚本会自动退回 `openpyxl`。
+
+如果自定义函数逻辑很复杂，只注册在 `FUNCTION_REGISTRY` 中也能正常运行，但速度会接近逐行处理。对于常用且数据量大的处理函数，建议同时注册 `VECTOR_FUNCTION_REGISTRY`。
 
 ## 使用方式
 

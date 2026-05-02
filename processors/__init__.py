@@ -1,3 +1,3 @@
-from .transform_functions import FUNCTION_REGISTRY
+from .transform_functions import FUNCTION_REGISTRY, VECTOR_FUNCTION_REGISTRY
 
-__all__ = ["FUNCTION_REGISTRY"]
+__all__ = ["FUNCTION_REGISTRY", "VECTOR_FUNCTION_REGISTRY"]
